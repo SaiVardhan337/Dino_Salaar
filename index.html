@@ -1,0 +1,230 @@
+<!doctype html>
+<!--
+  SALAAR RUN — single-file HTML5 canvas game
+  Required local assets:
+  assets/character-actions.png — jump and slide poses
+  assets/running-actions.png   — eight-frame running cycle
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f4f3ef">
+  <title>Salaar Run</title>
+  <style>
+    :root{color-scheme:light;--page:#ecebe6;--panel:#fff;--ink:#343432;--muted:#757570;--edge:#d8d7d1}
+    *{box-sizing:border-box}html,body{width:100%;min-height:100%;margin:0}
+    body{display:grid;place-items:center;padding:20px;overflow-x:hidden;background:var(--page);color:var(--ink);font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono",monospace}
+    .game-shell{width:min(100%,900px);user-select:none;-webkit-user-select:none}
+    .game-frame{padding:clamp(8px,2vw,18px);overflow:hidden;background:var(--panel);border:1px solid var(--edge);border-radius:14px;box-shadow:0 18px 50px rgba(35,35,30,.08)}
+    canvas{display:block;width:100%;height:auto;aspect-ratio:8/3;background:#fff;border-radius:7px;outline:none;touch-action:none;-webkit-tap-highlight-color:transparent}
+    canvas:focus-visible{box-shadow:0 0 0 3px rgba(52,52,50,.22)}
+    .controls{display:flex;justify-content:space-between;gap:16px;margin:10px 4px 0;color:var(--muted);font-size:clamp(10px,1.8vw,13px);letter-spacing:.04em;line-height:1.5}.controls span:last-child{text-align:right}
+    .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+    @media(max-width:520px){body{padding:8px}.game-frame{padding:6px;border-radius:10px}.controls{margin-inline:2px}}
+    @media(prefers-reduced-motion:reduce){.game-frame{box-shadow:none}}
+  </style>
+</head>
+<body>
+  <main class="game-shell" aria-label="Salaar Run game">
+    <div class="game-frame">
+      <canvas id="game" width="800" height="300" tabindex="0" role="img" aria-label="Salaar Run. Press Space or Up Arrow to jump. Press Down Arrow or S to slide. On touch screens, tap to jump or swipe down to slide."></canvas>
+    </div>
+    <div class="controls" aria-hidden="true"><span>SPACE / ↑ &nbsp; JUMP<br>M &nbsp; SOUND ON/OFF</span><span>↓ / S &nbsp; SLIDE<br>TAP / SWIPE ON MOBILE</span></div>
+    <p id="status" class="sr-only" aria-live="polite">Loading character sprite sheet.</p>
+  </main>
+
+  <script>
+    "use strict";
+
+    // Asset loading and source rectangles in the supplied sprite sheets.
+    const ASSETS=Object.freeze({actionSheet:"assets/character-actions.png",runningSheet:"assets/running-actions.png"});
+    const SPRITES=Object.freeze({
+      takeoff:{x:166,y:235,width:226,height:253},
+      inAir:{x:625,y:169,width:205,height:276},
+      landing:{x:1089,y:275,width:207,height:213},
+      slideStart:{x:205,y:698,width:166,height:200},
+      sliding:{x:538,y:763,width:360,height:136},
+      slideEnd:{x:1137,y:697,width:203,height:201}
+    });
+    const RUN_SPRITES=Object.freeze([
+      {x:112,y:145,width:218,height:293},
+      {x:474,y:180,width:218,height:258},
+      {x:825,y:145,width:244,height:278},
+      {x:1210,y:120,width:205,height:278},
+      {x:94,y:560,width:210,height:304},
+      {x:463,y:600,width:194,height:264},
+      {x:820,y:558,width:247,height:278},
+      {x:1212,y:544,width:206,height:289}
+    ]);
+
+    // Canvas and game constants.
+    const canvas=document.getElementById("game");
+    const ctx=canvas.getContext("2d",{alpha:false});
+    const statusText=document.getElementById("status");
+    const WORLD=Object.freeze({width:800,height:300,groundY:245,baseSpeed:300,maxSpeed:560,gravity:3200,jumpVelocity:-920,scoreScale:1/12,playerX:72});
+    const COLORS=Object.freeze({sky:"#fff",ink:"#3c3c39",faint:"#b7b7b0",overlay:"rgba(255,255,255,.9)"});
+    const PLAYER_BOX=Object.freeze({run:{width:92,height:98},slide:{width:132,height:72}});
+    let characterSheet=null,runningSheet=null;
+
+    function configureCanvas(){
+      const ratio=Math.min(window.devicePixelRatio||1,2);
+      canvas.width=Math.round(WORLD.width*ratio);canvas.height=Math.round(WORLD.height*ratio);
+      ctx.setTransform(ratio,0,0,ratio,0,0);ctx.imageSmoothingEnabled=true;
+    }
+    configureCanvas();window.addEventListener("resize",configureCanvas,{passive:true});
+
+    // Game state.
+    const state={
+      mode:"loading",score:0,highScore:loadHighScore(),speed:WORLD.baseSpeed,elapsed:0,nextChime:100,
+      spawnTimer:1.4,groundOffset:0,lastTimestamp:0,obstacles:[],runFrame:0,runFrameTimer:0,
+      input:{downHeld:false,swipeSlideUntil:0},
+      touch:{active:false,startX:0,startY:0,swipedDown:false,lastEndAt:-Infinity},
+      player:{bottomY:WORLD.groundY,velocityY:0,grounded:true,sliding:false,slidePhase:"none",slideTimer:0,frozenSpriteKey:"run",frozenRunFrame:0}
+    };
+    const clouds=[{x:110,y:57,scale:.75,speed:.032},{x:420,y:83,scale:1,speed:.024},{x:710,y:45,scale:.62,speed:.038}];
+
+    function loadHighScore(){try{const n=parseInt(localStorage.getItem("salaarRunHighScore"),10);return Number.isFinite(n)&&n>0?n:0}catch(_){return 0}}
+    function saveHighScore(){try{localStorage.setItem("salaarRunHighScore",String(state.highScore))}catch(_){}}
+    function loadImage(src){return new Promise((resolve,reject)=>{const image=new Image();image.decoding="async";image.onload=()=>resolve(image);image.onerror=reject;image.src=src})}
+    function loadCharacterSheets(){
+      drawLoading();
+      return Promise.all([loadImage(ASSETS.actionSheet),loadImage(ASSETS.runningSheet)]).then(([actions,running])=>{characterSheet=actions;runningSheet=running});
+    }
+
+    // Procedural Web Audio: no sound files or external dependencies required.
+    const audio={ctx:null,master:null,enabled:true};
+    function ensureAudio(){
+      const AudioEngine=window.AudioContext||window.webkitAudioContext;
+      if(!AudioEngine)return null;
+      if(!audio.ctx){audio.ctx=new AudioEngine();audio.master=audio.ctx.createGain();audio.master.gain.value=.2;audio.master.connect(audio.ctx.destination)}
+      if(audio.ctx.state==="suspended")audio.ctx.resume();
+      return audio.ctx;
+    }
+    function tone(from,to,duration,volume=.12,type="square",delay=0){
+      if(!audio.enabled)return;const ac=ensureAudio();if(!ac)return;const start=ac.currentTime+delay,osc=ac.createOscillator(),gain=ac.createGain();
+      osc.type=type;osc.frequency.setValueAtTime(from,start);osc.frequency.exponentialRampToValueAtTime(Math.max(20,to),start+duration);
+      gain.gain.setValueAtTime(volume,start);gain.gain.exponentialRampToValueAtTime(.001,start+duration);osc.connect(gain);gain.connect(audio.master);osc.start(start);osc.stop(start+duration+.02);
+    }
+    function noise(duration=.06,volume=.08,cutoff=500){
+      if(!audio.enabled)return;const ac=ensureAudio();if(!ac)return;const length=Math.ceil(ac.sampleRate*duration),buffer=ac.createBuffer(1,length,ac.sampleRate),data=buffer.getChannelData(0);
+      for(let i=0;i<length;i++)data[i]=Math.random()*2-1;
+      const source=ac.createBufferSource(),filter=ac.createBiquadFilter(),gain=ac.createGain(),now=ac.currentTime;source.buffer=buffer;filter.type="lowpass";filter.frequency.value=cutoff;gain.gain.setValueAtTime(volume,now);gain.gain.exponentialRampToValueAtTime(.001,now+duration);source.connect(filter);filter.connect(gain);gain.connect(audio.master);source.start(now);
+    }
+    function playStep(){noise(.035,.045,320)}
+    function playJump(){tone(180,430,.18,.12,"sawtooth")}
+    function playLand(){noise(.08,.11,210)}
+    function playSlide(){noise(.18,.07,1100)}
+    function playScore(){tone(520,660,.1,.09,"square");tone(660,880,.12,.08,"square",.09)}
+    function playCrash(){tone(170,45,.36,.18,"sawtooth");noise(.16,.14,260)}
+    function playRestart(){tone(260,520,.12,.08,"square")}
+    function toggleSound(){ensureAudio();audio.enabled=!audio.enabled;if(audio.master)audio.master.gain.setTargetAtTime(audio.enabled?.2:0,audio.ctx.currentTime,.015);statusText.textContent=audio.enabled?"Sound on.":"Sound muted.";if(audio.enabled)playRestart()}
+
+    // Keyboard, mouse, and touch controls.
+    function startOrJump(){
+      ensureAudio();
+      canvas.focus({preventScroll:true});
+      if(state.mode==="loading"||state.mode==="error")return;
+      if(state.mode==="gameover"){resetGame(true);playRestart();return}
+      if(state.mode==="ready")state.mode="running";
+      const p=state.player;
+      if(state.mode==="running"&&p.grounded){p.grounded=false;p.sliding=false;p.slidePhase="none";p.slideTimer=0;p.velocityY=WORLD.jumpVelocity;playJump();statusText.textContent="Jumping."}
+    }
+    function setSlide(value){if(value)ensureAudio();state.input.downHeld=value;if(value&&state.mode==="ready")state.mode="running"}
+    window.addEventListener("keydown",e=>{if(["Space","ArrowUp","ArrowDown","KeyS"].includes(e.code))e.preventDefault();if(e.code==="KeyM"&&!e.repeat)toggleSound();else if((e.code==="Space"||e.code==="ArrowUp")&&!e.repeat)startOrJump();else if(e.code==="ArrowDown"||e.code==="KeyS")setSlide(true)});
+    window.addEventListener("keyup",e=>{if(e.code==="ArrowDown"||e.code==="KeyS"){e.preventDefault();setSlide(false)}});
+    canvas.addEventListener("touchstart",e=>{e.preventDefault();ensureAudio();const t=e.changedTouches[0];Object.assign(state.touch,{active:true,startX:t.clientX,startY:t.clientY,swipedDown:false});canvas.focus({preventScroll:true})},{passive:false});
+    canvas.addEventListener("touchmove",e=>{e.preventDefault();if(!state.touch.active)return;const t=e.changedTouches[0],dx=t.clientX-state.touch.startX,dy=t.clientY-state.touch.startY;if(dy>30&&Math.abs(dy)>Math.abs(dx)*1.15){state.touch.swipedDown=true;state.input.swipeSlideUntil=performance.now()+650;if(state.mode==="ready")state.mode="running"}},{passive:false});
+    canvas.addEventListener("touchend",e=>{e.preventDefault();if(!state.touch.active)return;const t=e.changedTouches[0],dx=t.clientX-state.touch.startX,dy=t.clientY-state.touch.startY;if(!state.touch.swipedDown&&Math.hypot(dx,dy)<24)startOrJump();state.touch.active=false;state.touch.lastEndAt=performance.now()},{passive:false});
+    canvas.addEventListener("touchcancel",()=>{state.touch.active=false},{passive:true});
+    canvas.addEventListener("click",e=>{if(e.detail!==0&&performance.now()-state.touch.lastEndAt>=700)startOrJump()});
+
+    // State reset and delta-time update loop.
+    function resetGame(startImmediately=false){
+      Object.assign(state,{score:0,speed:WORLD.baseSpeed,elapsed:0,nextChime:100,spawnTimer:randomBetween(1.35,1.8),groundOffset:0,obstacles:[],runFrame:0,runFrameTimer:0});
+      Object.assign(state.input,{downHeld:false,swipeSlideUntil:0});
+      Object.assign(state.player,{bottomY:WORLD.groundY,velocityY:0,grounded:true,sliding:false,slidePhase:"none",slideTimer:0,frozenSpriteKey:"run",frozenRunFrame:0});
+      state.mode=startImmediately?"running":"ready";statusText.textContent=startImmediately?"Game restarted.":"Game ready. Press Space, Up Arrow, or tap to start.";
+    }
+    function update(dt,now){
+      if(state.mode!=="running")return;
+      state.elapsed+=dt;state.speed=Math.min(WORLD.maxSpeed,WORLD.baseSpeed*Math.pow(1.02,state.elapsed/10));state.score+=state.speed*WORLD.scoreScale*dt;state.groundOffset=(state.groundOffset+state.speed*dt)%48;
+      if(state.score>=state.nextChime){playScore();state.nextChime+=100}
+      updatePlayer(dt,now);updateClouds(dt);updateObstacles(dt);updateRunAnimation(dt);detectCollisions();
+    }
+    function updatePlayer(dt,now){
+      const p=state.player,wantsSlide=state.input.downHeld||now<state.input.swipeSlideUntil;
+      if(!p.grounded){p.velocityY+=WORLD.gravity*dt;p.bottomY+=p.velocityY*dt;if(p.bottomY>=WORLD.groundY){p.bottomY=WORLD.groundY;p.velocityY=0;p.grounded=true;playLand();statusText.textContent="Landed."}}
+      if(!p.grounded){p.sliding=false;p.slidePhase="none";p.slideTimer=0;return}
+      if(wantsSlide){
+        if(p.slidePhase==="none"||p.slidePhase==="exit"){p.slidePhase="enter";p.slideTimer=0;playSlide()}p.sliding=true;
+        if(p.slidePhase==="enter"&&(p.slideTimer+=dt)>=.11){p.slidePhase="hold";p.slideTimer=0}
+      }else if(p.slidePhase==="enter"||p.slidePhase==="hold"){p.slidePhase="exit";p.slideTimer=0;p.sliding=true}
+      else if(p.slidePhase==="exit"){p.sliding=true;if((p.slideTimer+=dt)>=.13){p.slidePhase="none";p.slideTimer=0;p.sliding=false}}
+      else p.sliding=false;
+    }
+    function updateRunAnimation(dt){if(!state.player.grounded||state.player.sliding)return;if((state.runFrameTimer+=dt)>=.09){state.runFrameTimer%=.09;state.runFrame=(state.runFrame+1)%RUN_SPRITES.length;if(state.runFrame===0||state.runFrame===4)playStep()}}
+    function updateClouds(dt){for(const c of clouds){c.x-=state.speed*c.speed*dt;if(c.x<-100*c.scale){c.x=WORLD.width+randomBetween(80,260);c.y=randomBetween(35,95)}}}
+    function updateObstacles(dt){
+      state.spawnTimer-=dt;if(state.spawnTimer<=0){spawnObstacle();scheduleNextSpawn()}
+      for(const o of state.obstacles){o.x-=state.speed*dt;if(o.kind==="bird"){o.flapTime+=dt;o.bobOffset=Math.sin(o.flapTime*7)*2}}
+      state.obstacles=state.obstacles.filter(o=>o.x+o.width>-20);
+    }
+    function scheduleNextSpawn(){const d=(state.speed-WORLD.baseSpeed)/(WORLD.maxSpeed-WORLD.baseSpeed);state.spawnTimer=randomBetween(1.2-d*.18,2.2-d*.45)}
+    function spawnObstacle(){
+      // Birds always cross the standing hero's head/shoulder line, making sliding the intended response.
+      if(state.score>=60&&Math.random()<.34){state.obstacles.push({kind:"bird",variant:0,x:WORLD.width+24,y:WORLD.groundY-104,width:54,height:30,flapTime:Math.random()*Math.PI*2,bobOffset:0});return}
+      // Every cactus reaches roughly the waist of the 98px-tall standing hero.
+      const types=[{width:24,height:50,variant:0},{width:40,height:54,variant:1},{width:48,height:52,variant:2}],t=types[Math.floor(Math.random()*types.length)];state.obstacles.push({kind:"ground",variant:t.variant,x:WORLD.width+24,y:WORLD.groundY-t.height,width:t.width,height:t.height,bobOffset:0});
+    }
+
+    // Sprite selection and forgiving collision boxes.
+    function getPlayerSpriteKey(){const p=state.player;if(!p.grounded)return"inAir";if(p.sliding)return p.slidePhase==="enter"?"slideStart":p.slidePhase==="exit"?"slideEnd":"sliding";return"run"}
+    function getSpriteData(key,runFrame=state.runFrame){return key==="run"?{sheet:runningSheet,sprite:RUN_SPRITES[runFrame]}:{sheet:characterSheet,sprite:SPRITES[key]}}
+    function getPlayerVisualRect(key=getPlayerSpriteKey(),runFrame=state.runFrame){
+      const s=getSpriteData(key,runFrame).sprite,box=state.player.sliding?PLAYER_BOX.slide:PLAYER_BOX.run,scale=Math.min(box.width/s.width,box.height/s.height);
+      return{x:WORLD.playerX,y:state.player.bottomY-s.height*scale,width:s.width*scale,height:s.height*scale};
+    }
+    function getPlayerHitbox(){return state.player.sliding?{x:WORLD.playerX+10,y:state.player.bottomY-45,width:105,height:42}:insetRect(getPlayerVisualRect(),.12)}
+    function insetRect(r,n){const x=r.width*n,y=r.height*n;return{x:r.x+x,y:r.y+y,width:r.width-x*2,height:r.height-y*2}}
+    function overlap(a,b){return a.x<b.x+b.width&&a.x+a.width>b.x&&a.y<b.y+b.height&&a.y+a.height>b.y}
+    function detectCollisions(){const p=getPlayerHitbox();for(const o of state.obstacles){const hit=insetRect({x:o.x,y:o.y+o.bobOffset,width:o.width,height:o.height},o.kind==="bird"?.15:.11);if(overlap(p,hit)){endGame();return}}}
+    function endGame(){state.mode="gameover";state.player.frozenSpriteKey=getPlayerSpriteKey();state.player.frozenRunFrame=state.runFrame;playCrash();const score=Math.floor(state.score);if(score>state.highScore){state.highScore=score;saveHighScore()}statusText.textContent=`Game over. Score ${score}. High score ${state.highScore}. Press Space to restart.`}
+
+    // Canvas rendering.
+    function draw(){ctx.fillStyle=COLORS.sky;ctx.fillRect(0,0,WORLD.width,WORLD.height);drawClouds();drawObstacles();drawPlayer();drawGround();drawHud();if(state.mode==="ready")drawReady();if(state.mode==="gameover")drawGameOver();if(state.mode==="error")drawAssetError()}
+    function drawPlayer(){
+      if(!characterSheet||!runningSheet)return;const frozen=state.mode==="gameover",key=frozen?state.player.frozenSpriteKey:getPlayerSpriteKey(),frame=frozen?state.player.frozenRunFrame:state.runFrame,data=getSpriteData(key,frame),s=data.sprite,r=getPlayerVisualRect(key,frame);
+      ctx.drawImage(data.sheet,s.x,s.y,s.width,s.height,r.x,r.y,r.width,r.height);
+    }
+    function drawObstacles(){ctx.save();ctx.fillStyle=COLORS.ink;for(const o of state.obstacles)o.kind==="bird"?drawBird(o):drawCactus(o);ctx.restore()}
+    function drawCactus(o){
+      const x=Math.round(o.x),y=Math.round(o.y),w=o.width,h=o.height;
+      if(o.variant===0)drawMiniCactus(x,y,w,h);
+      else if(o.variant===1){drawMiniCactus(x,y+h*.2,w*.58,h*.8);drawMiniCactus(x+w*.42,y,w*.58,h)}
+      else{drawMiniCactus(x,y+h*.28,w*.43,h*.72);drawMiniCactus(x+w*.28,y,w*.44,h);drawMiniCactus(x+w*.61,y+h*.2,w*.39,h*.8)}
+    }
+    function drawMiniCactus(x,y,w,h){const trunk=Math.max(6,Math.round(w*.3)),center=x+Math.round((w-trunk)/2);ctx.fillRect(center,y,trunk,h);ctx.fillRect(x,y+h*.38,center-x+2,7);ctx.fillRect(x,y+h*.22,6,h*.24);ctx.fillRect(center+trunk-2,y+h*.55,x+w-center-trunk+2,7);ctx.fillRect(x+w-6,y+h*.38,6,h*.25)}
+    function drawBird(o){
+      const x=o.x,y=o.y+o.bobOffset,up=Math.sin(o.flapTime*10)>0;ctx.beginPath();ctx.ellipse(x+31,y+19,17,8,0,0,Math.PI*2);ctx.fill();ctx.fillRect(x+45,y+16,10,5);
+      ctx.beginPath();ctx.moveTo(x+55,y+16);ctx.lineTo(x+62,y+19);ctx.lineTo(x+55,y+21);ctx.closePath();ctx.fill();
+      ctx.beginPath();ctx.moveTo(x+25,y+18);ctx.lineTo(x+2,up?y+2:y+31);ctx.lineTo(x+34,y+21);ctx.closePath();ctx.fill();
+      ctx.beginPath();ctx.moveTo(x+29,y+20);ctx.lineTo(x+12,up?y+32:y+5);ctx.lineTo(x+39,y+22);ctx.closePath();ctx.fill();
+    }
+    function drawGround(){
+      ctx.save();ctx.strokeStyle=COLORS.ink;ctx.fillStyle=COLORS.ink;ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(0,WORLD.groundY+1);ctx.lineTo(WORLD.width,WORLD.groundY+1);ctx.stroke();
+      for(let x=-state.groundOffset-20;x<WORLD.width+30;x+=48){const i=Math.floor((x+state.groundOffset+20)/48),len=3+Math.abs(i*17)%11,y=WORLD.groundY+11+Math.abs(i*7)%19;ctx.fillRect(Math.round(x),y,len,2);if(i%3===0)ctx.fillRect(Math.round(x+20),y+8,3,2)}ctx.restore();
+    }
+    function drawClouds(){ctx.save();ctx.strokeStyle=COLORS.faint;ctx.lineWidth=2;for(const c of clouds){const{x,y,scale:s}=c;ctx.beginPath();ctx.moveTo(x,y+22*s);ctx.lineTo(x+14*s,y+22*s);ctx.quadraticCurveTo(x+19*s,y+9*s,x+34*s,y+12*s);ctx.quadraticCurveTo(x+42*s,y-s,x+56*s,y+9*s);ctx.quadraticCurveTo(x+69*s,y+7*s,x+75*s,y+22*s);ctx.lineTo(x+92*s,y+22*s);ctx.stroke()}ctx.restore()}
+    function drawHud(){const score=String(Math.floor(state.score)).padStart(5,"0"),high=String(Math.floor(state.highScore)).padStart(5,"0");ctx.save();ctx.fillStyle=COLORS.ink;ctx.textBaseline="top";ctx.font="700 13px ui-monospace,monospace";ctx.textAlign="left";ctx.fillText("SALAAR RUN",24,21);ctx.font="700 19px ui-monospace,monospace";ctx.textAlign="right";ctx.fillText(`HI ${high}  ${score}`,WORLD.width-24,18);ctx.restore()}
+    function drawReady(){ctx.save();ctx.fillStyle=COLORS.ink;ctx.textAlign="center";ctx.textBaseline="middle";ctx.font="700 19px ui-monospace,monospace";ctx.fillText("PRESS SPACE OR TAP TO START",WORLD.width/2,155);ctx.font="13px ui-monospace,monospace";ctx.fillStyle=COLORS.faint;ctx.fillText("↑ JUMP   •   ↓ SLIDE",WORLD.width/2,181);ctx.restore()}
+    function drawGameOver(){ctx.save();ctx.fillStyle=COLORS.overlay;ctx.fillRect(0,73,WORLD.width,124);ctx.fillStyle=COLORS.ink;ctx.textAlign="center";ctx.textBaseline="middle";ctx.font="700 28px ui-monospace,monospace";ctx.fillText("GAME OVER",WORLD.width/2,105);ctx.font="700 15px ui-monospace,monospace";ctx.fillText(`SCORE ${String(Math.floor(state.score)).padStart(5,"0")}  •  HI ${String(state.highScore).padStart(5,"0")}`,WORLD.width/2,146);ctx.font="13px ui-monospace,monospace";ctx.fillText("PRESS SPACE OR TAP TO RESTART",WORLD.width/2,174);ctx.restore()}
+    function drawLoading(){ctx.fillStyle=COLORS.sky;ctx.fillRect(0,0,WORLD.width,WORLD.height);ctx.fillStyle=COLORS.ink;ctx.textAlign="center";ctx.textBaseline="middle";ctx.font="700 18px ui-monospace,monospace";ctx.fillText("LOADING CHARACTER...",WORLD.width/2,WORLD.height/2)}
+    function drawAssetError(){ctx.save();ctx.fillStyle=COLORS.overlay;ctx.fillRect(55,72,WORLD.width-110,145);ctx.fillStyle=COLORS.ink;ctx.textAlign="center";ctx.textBaseline="middle";ctx.font="700 18px ui-monospace,monospace";ctx.fillText("CHARACTER IMAGES NOT FOUND",WORLD.width/2,103);ctx.font="13px ui-monospace,monospace";ctx.fillText(`${ASSETS.actionSheet} + ${ASSETS.runningSheet}`,WORLD.width/2,140);ctx.fillStyle=COLORS.faint;ctx.fillText("Keep both beside index.html, then reload.",WORLD.width/2,176);ctx.restore()}
+
+    function randomBetween(min,max){return min+Math.random()*(max-min)}
+    function gameLoop(timestamp){if(!state.lastTimestamp)state.lastTimestamp=timestamp;const dt=Math.min((timestamp-state.lastTimestamp)/1000,.05);state.lastTimestamp=timestamp;update(dt,timestamp);draw();requestAnimationFrame(gameLoop)}
+    loadCharacterSheets().then(()=>{resetGame(false);requestAnimationFrame(gameLoop)}).catch(()=>{state.mode="error";statusText.textContent="Missing one or both character sprite sheets.";requestAnimationFrame(gameLoop)});
+  </script>
+</body>
+</html>
