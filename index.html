@@ -16,21 +16,25 @@
     *{box-sizing:border-box}html,body{width:100%;min-height:100%;margin:0}
     body{display:grid;place-items:center;padding:20px;overflow-x:hidden;background:var(--page);color:var(--ink);font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono",monospace}
     .game-shell{width:min(100%,900px);user-select:none;-webkit-user-select:none}
-    .game-frame{padding:clamp(8px,2vw,18px);overflow:hidden;background:var(--panel);border:1px solid var(--edge);border-radius:14px;box-shadow:0 18px 50px rgba(35,35,30,.08)}
+    .game-frame{position:relative;padding:clamp(8px,2vw,18px);overflow:hidden;background:var(--panel);border:1px solid var(--edge);border-radius:14px;box-shadow:0 18px 50px rgba(35,35,30,.08)}
     canvas{display:block;width:100%;height:auto;aspect-ratio:8/3;background:#fff;border-radius:7px;outline:none;touch-action:none;-webkit-tap-highlight-color:transparent}
     canvas:focus-visible{box-shadow:0 0 0 3px rgba(52,52,50,.22)}
     .controls{display:flex;justify-content:space-between;gap:16px;margin:10px 4px 0;color:var(--muted);font-size:clamp(10px,1.8vw,13px);letter-spacing:.04em;line-height:1.5}.controls span:last-child{text-align:right}
+    .pause-button{display:none;position:absolute;right:14px;bottom:14px;z-index:2;width:44px;height:44px;padding:0;border:1px solid rgba(52,52,50,.3);border-radius:50%;background:rgba(255,255,255,.9);color:var(--ink);font:700 20px/1 ui-monospace,monospace;place-items:center;box-shadow:0 4px 16px rgba(35,35,30,.12);touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+    .pause-button:active{transform:scale(.94)}
     .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
-    @media(max-width:520px){body{padding:8px}.game-frame{padding:6px;border-radius:10px}.controls{margin-inline:2px}}
+    @media(max-width:720px){.pause-button{display:grid}}
+    @media(max-width:520px){body{padding:8px}.game-frame{padding:6px;border-radius:10px}.pause-button{right:10px;bottom:10px}.controls{margin-inline:2px}}
     @media(prefers-reduced-motion:reduce){.game-frame{box-shadow:none}}
   </style>
 </head>
 <body>
   <main class="game-shell" aria-label="Salaar Run game">
     <div class="game-frame">
-      <canvas id="game" width="800" height="300" tabindex="0" role="img" aria-label="Salaar Run. Press Space or Up Arrow to jump. Press Down Arrow or S to slide. On touch screens, tap to jump or swipe down to slide."></canvas>
+      <canvas id="game" width="800" height="300" tabindex="0" role="img" aria-label="Salaar Run. Press Space or Up Arrow to jump. Press Down Arrow or S to slide. Press Escape to pause. On touch screens, tap to jump, swipe down to slide, or use the pause button."></canvas>
+      <button id="pauseButton" class="pause-button" type="button" aria-label="Pause game" aria-pressed="false">⏸</button>
     </div>
-    <div class="controls" aria-hidden="true"><span>SPACE / ↑ &nbsp; JUMP<br>M &nbsp; SOUND ON/OFF</span><span>↓ / S &nbsp; SLIDE<br>TAP / SWIPE ON MOBILE</span></div>
+    <div class="controls" aria-hidden="true"><span>SPACE / ↑ &nbsp; JUMP<br>ESC &nbsp; PAUSE</span><span>↓ / S &nbsp; SLIDE<br>M &nbsp; SOUND ON/OFF</span></div>
     <p id="status" class="sr-only" aria-live="polite">Loading character sprite sheet.</p>
   </main>
 
@@ -62,6 +66,7 @@
     const canvas=document.getElementById("game");
     const ctx=canvas.getContext("2d",{alpha:false});
     const statusText=document.getElementById("status");
+    const pauseButton=document.getElementById("pauseButton");
     const WORLD=Object.freeze({width:800,height:300,groundY:245,baseSpeed:300,maxSpeed:560,gravity:3200,jumpVelocity:-920,scoreScale:1/12,playerX:72});
     const COLORS=Object.freeze({sky:"#fff",ink:"#3c3c39",faint:"#b7b7b0",overlay:"rgba(255,255,255,.9)"});
     const PLAYER_BOX=Object.freeze({run:{width:92,height:98},slide:{width:132,height:72}});
@@ -119,6 +124,13 @@
     function playCrash(){tone(170,45,.36,.18,"sawtooth");noise(.16,.14,260)}
     function playRestart(){tone(260,520,.12,.08,"square")}
     function toggleSound(){ensureAudio();audio.enabled=!audio.enabled;if(audio.master)audio.master.gain.setTargetAtTime(audio.enabled?.2:0,audio.ctx.currentTime,.015);statusText.textContent=audio.enabled?"Sound on.":"Sound muted.";if(audio.enabled)playRestart()}
+    function syncPauseButton(){const paused=state.mode==="paused";pauseButton.textContent=paused?"▶":"⏸";pauseButton.setAttribute("aria-label",paused?"Resume game":"Pause game");pauseButton.setAttribute("aria-pressed",String(paused))}
+    function togglePause(){
+      if(state.mode!=="running"&&state.mode!=="paused")return;ensureAudio();
+      if(state.mode==="running"){state.mode="paused";state.input.downHeld=false;tone(420,250,.09,.07,"square");statusText.textContent="Game paused. Press Escape or tap the resume button."}
+      else{state.mode="running";tone(250,460,.09,.07,"square");statusText.textContent="Game resumed."}
+      syncPauseButton();
+    }
 
     // Keyboard, mouse, and touch controls.
     function startOrJump(){
@@ -131,20 +143,21 @@
       if(state.mode==="running"&&p.grounded){p.grounded=false;p.sliding=false;p.slidePhase="none";p.slideTimer=0;p.velocityY=WORLD.jumpVelocity;playJump();statusText.textContent="Jumping."}
     }
     function setSlide(value){if(value)ensureAudio();state.input.downHeld=value;if(value&&state.mode==="ready")state.mode="running"}
-    window.addEventListener("keydown",e=>{if(["Space","ArrowUp","ArrowDown","KeyS"].includes(e.code))e.preventDefault();if(e.code==="KeyM"&&!e.repeat)toggleSound();else if((e.code==="Space"||e.code==="ArrowUp")&&!e.repeat)startOrJump();else if(e.code==="ArrowDown"||e.code==="KeyS")setSlide(true)});
+    window.addEventListener("keydown",e=>{if(["Space","ArrowUp","ArrowDown","KeyS","Escape"].includes(e.code))e.preventDefault();if(e.code==="Escape"&&!e.repeat)togglePause();else if(e.code==="KeyM"&&!e.repeat)toggleSound();else if((e.code==="Space"||e.code==="ArrowUp")&&!e.repeat)startOrJump();else if(e.code==="ArrowDown"||e.code==="KeyS")setSlide(true)});
     window.addEventListener("keyup",e=>{if(e.code==="ArrowDown"||e.code==="KeyS"){e.preventDefault();setSlide(false)}});
     canvas.addEventListener("touchstart",e=>{e.preventDefault();ensureAudio();const t=e.changedTouches[0];Object.assign(state.touch,{active:true,startX:t.clientX,startY:t.clientY,swipedDown:false});canvas.focus({preventScroll:true})},{passive:false});
     canvas.addEventListener("touchmove",e=>{e.preventDefault();if(!state.touch.active)return;const t=e.changedTouches[0],dx=t.clientX-state.touch.startX,dy=t.clientY-state.touch.startY;if(dy>30&&Math.abs(dy)>Math.abs(dx)*1.15){state.touch.swipedDown=true;state.input.swipeSlideUntil=performance.now()+650;if(state.mode==="ready")state.mode="running"}},{passive:false});
     canvas.addEventListener("touchend",e=>{e.preventDefault();if(!state.touch.active)return;const t=e.changedTouches[0],dx=t.clientX-state.touch.startX,dy=t.clientY-state.touch.startY;if(!state.touch.swipedDown&&Math.hypot(dx,dy)<24)startOrJump();state.touch.active=false;state.touch.lastEndAt=performance.now()},{passive:false});
     canvas.addEventListener("touchcancel",()=>{state.touch.active=false},{passive:true});
     canvas.addEventListener("click",e=>{if(e.detail!==0&&performance.now()-state.touch.lastEndAt>=700)startOrJump()});
+    pauseButton.addEventListener("click",e=>{e.preventDefault();e.stopPropagation();togglePause()});
 
     // State reset and delta-time update loop.
     function resetGame(startImmediately=false){
       Object.assign(state,{score:0,speed:WORLD.baseSpeed,elapsed:0,nextChime:100,spawnTimer:randomBetween(1.35,1.8),groundOffset:0,obstacles:[],runFrame:0,runFrameTimer:0});
       Object.assign(state.input,{downHeld:false,swipeSlideUntil:0});
       Object.assign(state.player,{bottomY:WORLD.groundY,velocityY:0,grounded:true,sliding:false,slidePhase:"none",slideTimer:0,frozenSpriteKey:"run",frozenRunFrame:0});
-      state.mode=startImmediately?"running":"ready";statusText.textContent=startImmediately?"Game restarted.":"Game ready. Press Space, Up Arrow, or tap to start.";
+      state.mode=startImmediately?"running":"ready";syncPauseButton();statusText.textContent=startImmediately?"Game restarted.":"Game ready. Press Space, Up Arrow, or tap to start.";
     }
     function update(dt,now){
       if(state.mode!=="running")return;
@@ -192,7 +205,7 @@
     function endGame(){state.mode="gameover";state.player.frozenSpriteKey=getPlayerSpriteKey();state.player.frozenRunFrame=state.runFrame;playCrash();const score=Math.floor(state.score);if(score>state.highScore){state.highScore=score;saveHighScore()}statusText.textContent=`Game over. Score ${score}. High score ${state.highScore}. Press Space to restart.`}
 
     // Canvas rendering.
-    function draw(){ctx.fillStyle=COLORS.sky;ctx.fillRect(0,0,WORLD.width,WORLD.height);drawClouds();drawObstacles();drawPlayer();drawGround();drawHud();if(state.mode==="ready")drawReady();if(state.mode==="gameover")drawGameOver();if(state.mode==="error")drawAssetError()}
+    function draw(){ctx.fillStyle=COLORS.sky;ctx.fillRect(0,0,WORLD.width,WORLD.height);drawClouds();drawObstacles();drawPlayer();drawGround();drawHud();if(state.mode==="ready")drawReady();if(state.mode==="paused")drawPaused();if(state.mode==="gameover")drawGameOver();if(state.mode==="error")drawAssetError()}
     function drawPlayer(){
       if(!characterSheet||!runningSheet)return;const frozen=state.mode==="gameover",key=frozen?state.player.frozenSpriteKey:getPlayerSpriteKey(),frame=frozen?state.player.frozenRunFrame:state.runFrame,data=getSpriteData(key,frame),s=data.sprite,r=getPlayerVisualRect(key,frame);
       ctx.drawImage(data.sheet,s.x,s.y,s.width,s.height,r.x,r.y,r.width,r.height);
@@ -218,6 +231,7 @@
     function drawClouds(){ctx.save();ctx.strokeStyle=COLORS.faint;ctx.lineWidth=2;for(const c of clouds){const{x,y,scale:s}=c;ctx.beginPath();ctx.moveTo(x,y+22*s);ctx.lineTo(x+14*s,y+22*s);ctx.quadraticCurveTo(x+19*s,y+9*s,x+34*s,y+12*s);ctx.quadraticCurveTo(x+42*s,y-s,x+56*s,y+9*s);ctx.quadraticCurveTo(x+69*s,y+7*s,x+75*s,y+22*s);ctx.lineTo(x+92*s,y+22*s);ctx.stroke()}ctx.restore()}
     function drawHud(){const score=String(Math.floor(state.score)).padStart(5,"0"),high=String(Math.floor(state.highScore)).padStart(5,"0");ctx.save();ctx.fillStyle=COLORS.ink;ctx.textBaseline="top";ctx.font="700 13px ui-monospace,monospace";ctx.textAlign="left";ctx.fillText("SALAAR RUN",24,21);ctx.font="700 19px ui-monospace,monospace";ctx.textAlign="right";ctx.fillText(`HI ${high}  ${score}`,WORLD.width-24,18);ctx.restore()}
     function drawReady(){ctx.save();ctx.fillStyle=COLORS.ink;ctx.textAlign="center";ctx.textBaseline="middle";ctx.font="700 19px ui-monospace,monospace";ctx.fillText("PRESS SPACE OR TAP TO START",WORLD.width/2,155);ctx.font="13px ui-monospace,monospace";ctx.fillStyle=COLORS.faint;ctx.fillText("↑ JUMP   •   ↓ SLIDE",WORLD.width/2,181);ctx.restore()}
+    function drawPaused(){ctx.save();ctx.fillStyle=COLORS.overlay;ctx.fillRect(0,78,WORLD.width,116);ctx.fillStyle=COLORS.ink;ctx.textAlign="center";ctx.textBaseline="middle";ctx.font="700 28px ui-monospace,monospace";ctx.fillText("PAUSED",WORLD.width/2,116);ctx.font="13px ui-monospace,monospace";ctx.fillText("PRESS ESC OR TAP ▶ TO RESUME",WORLD.width/2,158);ctx.restore()}
     function drawGameOver(){ctx.save();ctx.fillStyle=COLORS.overlay;ctx.fillRect(0,73,WORLD.width,124);ctx.fillStyle=COLORS.ink;ctx.textAlign="center";ctx.textBaseline="middle";ctx.font="700 28px ui-monospace,monospace";ctx.fillText("GAME OVER",WORLD.width/2,105);ctx.font="700 15px ui-monospace,monospace";ctx.fillText(`SCORE ${String(Math.floor(state.score)).padStart(5,"0")}  •  HI ${String(state.highScore).padStart(5,"0")}`,WORLD.width/2,146);ctx.font="13px ui-monospace,monospace";ctx.fillText("PRESS SPACE OR TAP TO RESTART",WORLD.width/2,174);ctx.restore()}
     function drawLoading(){ctx.fillStyle=COLORS.sky;ctx.fillRect(0,0,WORLD.width,WORLD.height);ctx.fillStyle=COLORS.ink;ctx.textAlign="center";ctx.textBaseline="middle";ctx.font="700 18px ui-monospace,monospace";ctx.fillText("LOADING CHARACTER...",WORLD.width/2,WORLD.height/2)}
     function drawAssetError(){ctx.save();ctx.fillStyle=COLORS.overlay;ctx.fillRect(55,72,WORLD.width-110,145);ctx.fillStyle=COLORS.ink;ctx.textAlign="center";ctx.textBaseline="middle";ctx.font="700 18px ui-monospace,monospace";ctx.fillText("CHARACTER IMAGES NOT FOUND",WORLD.width/2,103);ctx.font="13px ui-monospace,monospace";ctx.fillText(`${ASSETS.actionSheet} + ${ASSETS.runningSheet}`,WORLD.width/2,140);ctx.fillStyle=COLORS.faint;ctx.fillText("Keep both beside index.html, then reload.",WORLD.width/2,176);ctx.restore()}
