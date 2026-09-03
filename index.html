@@ -67,7 +67,7 @@
     const ctx=canvas.getContext("2d",{alpha:false});
     const statusText=document.getElementById("status");
     const pauseButton=document.getElementById("pauseButton");
-    const WORLD=Object.freeze({width:800,height:300,groundY:245,baseSpeed:300,maxSpeed:560,gravity:3200,jumpVelocity:-920,scoreScale:1/12,playerX:72});
+    const WORLD=Object.freeze({width:800,height:300,groundY:245,baseSpeed:300,maxSpeed:560,speedEvery:250,speedMultiplier:1.1,gravity:3200,jumpVelocity:-920,scoreScale:1/12,playerX:72});
     const COLORS=Object.freeze({sky:"#fff",ink:"#3c3c39",faint:"#b7b7b0",overlay:"rgba(255,255,255,.9)"});
     const PLAYER_BOX=Object.freeze({run:{width:92,height:98},slide:{width:132,height:72}});
     let characterSheet=null,runningSheet=null;
@@ -81,7 +81,7 @@
 
     // Game state.
     const state={
-      mode:"loading",score:0,highScore:loadHighScore(),speed:WORLD.baseSpeed,elapsed:0,nextChime:100,
+      mode:"loading",score:0,highScore:loadHighScore(),speed:WORLD.baseSpeed,speedLevel:0,speedFlash:0,elapsed:0,nextChime:100,
       spawnTimer:1.4,groundOffset:0,lastTimestamp:0,obstacles:[],runFrame:0,runFrameTimer:0,
       input:{downHeld:false,swipeSlideUntil:0},
       touch:{active:false,startX:0,startY:0,swipedDown:false,lastEndAt:-Infinity},
@@ -123,6 +123,7 @@
     function playScore(){tone(520,660,.1,.09,"square");tone(660,880,.12,.08,"square",.09)}
     function playCrash(){tone(170,45,.36,.18,"sawtooth");noise(.16,.14,260)}
     function playRestart(){tone(260,520,.12,.08,"square")}
+    function playSpeedUp(){tone(420,620,.09,.08,"square");tone(620,840,.11,.08,"square",.08)}
     function toggleSound(){ensureAudio();audio.enabled=!audio.enabled;if(audio.master)audio.master.gain.setTargetAtTime(audio.enabled?.2:0,audio.ctx.currentTime,.015);statusText.textContent=audio.enabled?"Sound on.":"Sound muted.";if(audio.enabled)playRestart()}
     function syncPauseButton(){const paused=state.mode==="paused";pauseButton.textContent=paused?"▶":"⏸";pauseButton.setAttribute("aria-label",paused?"Resume game":"Pause game");pauseButton.setAttribute("aria-pressed",String(paused))}
     function togglePause(){
@@ -154,14 +155,17 @@
 
     // State reset and delta-time update loop.
     function resetGame(startImmediately=false){
-      Object.assign(state,{score:0,speed:WORLD.baseSpeed,elapsed:0,nextChime:100,spawnTimer:randomBetween(1.35,1.8),groundOffset:0,obstacles:[],runFrame:0,runFrameTimer:0});
+      Object.assign(state,{score:0,speed:WORLD.baseSpeed,speedLevel:0,speedFlash:0,elapsed:0,nextChime:100,spawnTimer:randomBetween(1.35,1.8),groundOffset:0,obstacles:[],runFrame:0,runFrameTimer:0});
       Object.assign(state.input,{downHeld:false,swipeSlideUntil:0});
       Object.assign(state.player,{bottomY:WORLD.groundY,velocityY:0,grounded:true,sliding:false,slidePhase:"none",slideTimer:0,frozenSpriteKey:"run",frozenRunFrame:0});
       state.mode=startImmediately?"running":"ready";syncPauseButton();statusText.textContent=startImmediately?"Game restarted.":"Game ready. Press Space, Up Arrow, or tap to start.";
     }
     function update(dt,now){
       if(state.mode!=="running")return;
-      state.elapsed+=dt;state.speed=Math.min(WORLD.maxSpeed,WORLD.baseSpeed*Math.pow(1.02,state.elapsed/10));state.score+=state.speed*WORLD.scoreScale*dt;state.groundOffset=(state.groundOffset+state.speed*dt)%48;
+      state.elapsed+=dt;state.score+=state.speed*WORLD.scoreScale*dt;
+      const earnedLevel=Math.floor(state.score/WORLD.speedEvery);
+      if(earnedLevel>state.speedLevel){state.speedLevel=earnedLevel;state.speed=Math.min(WORLD.maxSpeed,WORLD.baseSpeed*Math.pow(WORLD.speedMultiplier,state.speedLevel));state.speedFlash=1;playSpeedUp();statusText.textContent=`Speed level ${state.speedLevel+1}.`}
+      state.speedFlash=Math.max(0,state.speedFlash-dt);state.groundOffset=(state.groundOffset+state.speed*dt)%48;
       if(state.score>=state.nextChime){playScore();state.nextChime+=100}
       updatePlayer(dt,now);updateClouds(dt);updateObstacles(dt);updateRunAnimation(dt);detectCollisions();
     }
@@ -205,7 +209,7 @@
     function endGame(){state.mode="gameover";state.player.frozenSpriteKey=getPlayerSpriteKey();state.player.frozenRunFrame=state.runFrame;playCrash();const score=Math.floor(state.score);if(score>state.highScore){state.highScore=score;saveHighScore()}statusText.textContent=`Game over. Score ${score}. High score ${state.highScore}. Press Space to restart.`}
 
     // Canvas rendering.
-    function draw(){ctx.fillStyle=COLORS.sky;ctx.fillRect(0,0,WORLD.width,WORLD.height);drawClouds();drawObstacles();drawPlayer();drawGround();drawHud();if(state.mode==="ready")drawReady();if(state.mode==="paused")drawPaused();if(state.mode==="gameover")drawGameOver();if(state.mode==="error")drawAssetError()}
+    function draw(){ctx.fillStyle=COLORS.sky;ctx.fillRect(0,0,WORLD.width,WORLD.height);drawClouds();drawObstacles();drawPlayer();drawGround();drawHud();if(state.speedFlash>0&&state.mode==="running")drawSpeedUp();if(state.mode==="ready")drawReady();if(state.mode==="paused")drawPaused();if(state.mode==="gameover")drawGameOver();if(state.mode==="error")drawAssetError()}
     function drawPlayer(){
       if(!characterSheet||!runningSheet)return;const frozen=state.mode==="gameover",key=frozen?state.player.frozenSpriteKey:getPlayerSpriteKey(),frame=frozen?state.player.frozenRunFrame:state.runFrame,data=getSpriteData(key,frame),s=data.sprite,r=getPlayerVisualRect(key,frame);
       ctx.drawImage(data.sheet,s.x,s.y,s.width,s.height,r.x,r.y,r.width,r.height);
@@ -231,6 +235,7 @@
     function drawClouds(){ctx.save();ctx.strokeStyle=COLORS.faint;ctx.lineWidth=2;for(const c of clouds){const{x,y,scale:s}=c;ctx.beginPath();ctx.moveTo(x,y+22*s);ctx.lineTo(x+14*s,y+22*s);ctx.quadraticCurveTo(x+19*s,y+9*s,x+34*s,y+12*s);ctx.quadraticCurveTo(x+42*s,y-s,x+56*s,y+9*s);ctx.quadraticCurveTo(x+69*s,y+7*s,x+75*s,y+22*s);ctx.lineTo(x+92*s,y+22*s);ctx.stroke()}ctx.restore()}
     function drawHud(){const score=String(Math.floor(state.score)).padStart(5,"0"),high=String(Math.floor(state.highScore)).padStart(5,"0");ctx.save();ctx.fillStyle=COLORS.ink;ctx.textBaseline="top";ctx.font="700 13px ui-monospace,monospace";ctx.textAlign="left";ctx.fillText("SALAAR RUN",24,21);ctx.font="700 19px ui-monospace,monospace";ctx.textAlign="right";ctx.fillText(`HI ${high}  ${score}`,WORLD.width-24,18);ctx.restore()}
     function drawReady(){ctx.save();ctx.fillStyle=COLORS.ink;ctx.textAlign="center";ctx.textBaseline="middle";ctx.font="700 19px ui-monospace,monospace";ctx.fillText("PRESS SPACE OR TAP TO START",WORLD.width/2,155);ctx.font="13px ui-monospace,monospace";ctx.fillStyle=COLORS.faint;ctx.fillText("↑ JUMP   •   ↓ SLIDE",WORLD.width/2,181);ctx.restore()}
+    function drawSpeedUp(){ctx.save();ctx.globalAlpha=Math.min(1,state.speedFlash*2);ctx.fillStyle=COLORS.ink;ctx.textAlign="center";ctx.textBaseline="middle";ctx.font="700 17px ui-monospace,monospace";ctx.fillText(`SPEED UP!  LEVEL ${state.speedLevel+1}`,WORLD.width/2,72);ctx.restore()}
     function drawPaused(){ctx.save();ctx.fillStyle=COLORS.overlay;ctx.fillRect(0,78,WORLD.width,116);ctx.fillStyle=COLORS.ink;ctx.textAlign="center";ctx.textBaseline="middle";ctx.font="700 28px ui-monospace,monospace";ctx.fillText("PAUSED",WORLD.width/2,116);ctx.font="13px ui-monospace,monospace";ctx.fillText("PRESS ESC OR TAP ▶ TO RESUME",WORLD.width/2,158);ctx.restore()}
     function drawGameOver(){ctx.save();ctx.fillStyle=COLORS.overlay;ctx.fillRect(0,73,WORLD.width,124);ctx.fillStyle=COLORS.ink;ctx.textAlign="center";ctx.textBaseline="middle";ctx.font="700 28px ui-monospace,monospace";ctx.fillText("GAME OVER",WORLD.width/2,105);ctx.font="700 15px ui-monospace,monospace";ctx.fillText(`SCORE ${String(Math.floor(state.score)).padStart(5,"0")}  •  HI ${String(state.highScore).padStart(5,"0")}`,WORLD.width/2,146);ctx.font="13px ui-monospace,monospace";ctx.fillText("PRESS SPACE OR TAP TO RESTART",WORLD.width/2,174);ctx.restore()}
     function drawLoading(){ctx.fillStyle=COLORS.sky;ctx.fillRect(0,0,WORLD.width,WORLD.height);ctx.fillStyle=COLORS.ink;ctx.textAlign="center";ctx.textBaseline="middle";ctx.font="700 18px ui-monospace,monospace";ctx.fillText("LOADING CHARACTER...",WORLD.width/2,WORLD.height/2)}

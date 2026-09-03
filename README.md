@@ -28,7 +28,7 @@ Everything runs directly in the browser using one HTML file, HTML5 Canvas, vanil
 - 🛝 Animated slide sequence with a reduced collision hitbox
 - 🌵 Randomized waist-high cactus obstacles
 - 🐦 Head-level flying obstacles designed to be avoided by sliding
-- ⚡ Gradually increasing speed and difficulty
+- ⚡ A noticeable 10% speed boost every 250 points, up to the maximum pace
 - 🏆 Live score and persistent high score using `localStorage`
 - 🔊 Procedural footsteps, jump, landing, slide, score, and collision sounds
 - ⏸️ Pause and resume with `Esc` or the mobile pause button
@@ -123,7 +123,7 @@ _Replace the URL above after the first production deployment._
 
 1. Short, well-timed jumps are enough for the cacti.
 2. Slide when a bird approaches the hero's head or shoulders.
-3. Watch the obstacle rhythm—the game becomes progressively faster.
+3. Prepare for a 10% speed boost whenever the score crosses another 250 points.
 4. Press `M` anytime if you prefer to play silently.
 
 ---
