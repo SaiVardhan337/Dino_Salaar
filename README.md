@@ -32,7 +32,7 @@ Everything runs directly in the browser using one HTML file, HTML5 Canvas, vanil
 - 🏆 Live score and persistent high score using `localStorage`
 - 🔊 Procedural footsteps, jump, landing, slide, score, and collision sounds
 - ⏸️ Pause and resume with `Esc` or the mobile pause button
-- 📱 Responsive canvas with tap-to-jump and swipe-to-slide controls
+- 📱 Responsive canvas with reliable gestures and dedicated mobile jump/slide buttons
 - 🎯 Forgiving collision boxes for fair gameplay
 - 🚫 No frameworks, build tools, or external runtime dependencies
 
@@ -40,8 +40,8 @@ Everything runs directly in the browser using one HTML file, HTML5 Canvas, vanil
 
 | Action | Keyboard | Mobile |
 |---|---|---|
-| Jump | `Space` or `↑` | Tap the game |
-| Slide | Hold `S` or `↓` | Swipe down |
+| Jump | `Space` or `↑` | Tap the game or tap `↑` |
+| Slide | Hold `S` or `↓` | Swipe down, tap `↓`, or hold `↓` |
 | Sound | Press `M` to mute/unmute | — |
 | Pause/resume | `Esc` | Tap `⏸` or `▶` |
 | Restart | `Space` or `↑` after collision | Tap after collision |

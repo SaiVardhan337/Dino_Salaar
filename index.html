@@ -13,26 +13,34 @@
   <title>Salaar Run</title>
   <style>
     :root{color-scheme:light;--page:#ecebe6;--panel:#fff;--ink:#343432;--muted:#757570;--edge:#d8d7d1}
-    *{box-sizing:border-box}html,body{width:100%;min-height:100%;margin:0}
+    *{box-sizing:border-box}html,body{width:100%;min-height:100%;margin:0;overscroll-behavior:none}
     body{display:grid;place-items:center;padding:20px;overflow-x:hidden;background:var(--page);color:var(--ink);font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono",monospace}
     .game-shell{width:min(100%,900px);user-select:none;-webkit-user-select:none}
     .game-frame{position:relative;padding:clamp(8px,2vw,18px);overflow:hidden;background:var(--panel);border:1px solid var(--edge);border-radius:14px;box-shadow:0 18px 50px rgba(35,35,30,.08)}
     canvas{display:block;width:100%;height:auto;aspect-ratio:8/3;background:#fff;border-radius:7px;outline:none;touch-action:none;-webkit-tap-highlight-color:transparent}
     canvas:focus-visible{box-shadow:0 0 0 3px rgba(52,52,50,.22)}
     .controls{display:flex;justify-content:space-between;gap:16px;margin:10px 4px 0;color:var(--muted);font-size:clamp(10px,1.8vw,13px);letter-spacing:.04em;line-height:1.5}.controls span:last-child{text-align:right}
-    .pause-button{display:none;position:absolute;right:14px;bottom:14px;z-index:2;width:44px;height:44px;padding:0;border:1px solid rgba(52,52,50,.3);border-radius:50%;background:rgba(255,255,255,.9);color:var(--ink);font:700 20px/1 ui-monospace,monospace;place-items:center;box-shadow:0 4px 16px rgba(35,35,30,.12);touch-action:manipulation;-webkit-tap-highlight-color:transparent}
-    .pause-button:active{transform:scale(.94)}
+    .mobile-controls{display:none;align-items:center;justify-content:space-between;gap:18px;margin-top:8px;padding:0 6px;touch-action:none}
+    .mobile-button{width:48px;height:48px;padding:0;border:1px solid rgba(52,52,50,.3);border-radius:50%;background:#fff;color:var(--ink);font:700 22px/1 ui-monospace,monospace;place-items:center;box-shadow:0 4px 14px rgba(35,35,30,.11);touch-action:none;-webkit-tap-highlight-color:transparent;cursor:pointer}
+    .mobile-button:active,.mobile-button.is-held{background:#e8e7e1;box-shadow:inset 0 2px 6px rgba(35,35,30,.15)}
+    .pause-button{font-size:19px}
     .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
-    @media(max-width:720px){.pause-button{display:grid}}
-    @media(max-width:520px){body{padding:8px}.game-frame{padding:6px;border-radius:10px}.pause-button{right:10px;bottom:10px}.controls{margin-inline:2px}}
+    @media(max-width:720px),(pointer:coarse){.mobile-controls{display:flex}.mobile-button{display:grid}}
+    @media(max-width:520px){body{padding:8px}.game-frame{padding:6px;border-radius:10px}.controls{margin-inline:2px}.mobile-controls{margin-top:5px}.mobile-button{width:44px;height:44px;font-size:20px}}
+    @media(max-width:360px){body{padding:4px}.game-frame{padding:4px}.controls{font-size:9px;gap:8px;margin-top:6px}}
+    @media(max-height:360px){body{padding:4px}.controls{display:none}.mobile-controls{margin-top:4px}}
     @media(prefers-reduced-motion:reduce){.game-frame{box-shadow:none}}
   </style>
 </head>
 <body>
   <main class="game-shell" aria-label="Salaar Run game">
     <div class="game-frame">
-      <canvas id="game" width="800" height="300" tabindex="0" role="img" aria-label="Salaar Run. Press Space or Up Arrow to jump. Press Down Arrow or S to slide. Press Escape to pause. On touch screens, tap to jump, swipe down to slide, or use the pause button."></canvas>
-      <button id="pauseButton" class="pause-button" type="button" aria-label="Pause game" aria-pressed="false">⏸</button>
+      <canvas id="game" width="800" height="300" tabindex="0" role="img" aria-label="Salaar Run. Press Space or Up Arrow to jump. Press Down Arrow or S to slide. Press Escape to pause. On touch screens, tap or use the up button to jump, swipe down or hold the down button to slide, and use the pause button to pause."></canvas>
+      <div class="mobile-controls" aria-label="Mobile game controls">
+        <button id="jumpButton" class="mobile-button" type="button" aria-label="Jump">↑</button>
+        <button id="pauseButton" class="mobile-button pause-button" type="button" aria-label="Pause game" aria-pressed="false">⏸</button>
+        <button id="slideButton" class="mobile-button" type="button" aria-label="Slide">↓</button>
+      </div>
     </div>
     <div class="controls" aria-hidden="true"><span>SPACE / ↑ &nbsp; JUMP<br>ESC &nbsp; PAUSE</span><span>↓ / S &nbsp; SLIDE<br>M &nbsp; SOUND ON/OFF</span></div>
     <p id="status" class="sr-only" aria-live="polite">Loading character sprite sheet.</p>
@@ -66,7 +74,9 @@
     const canvas=document.getElementById("game");
     const ctx=canvas.getContext("2d",{alpha:false});
     const statusText=document.getElementById("status");
+    const jumpButton=document.getElementById("jumpButton");
     const pauseButton=document.getElementById("pauseButton");
+    const slideButton=document.getElementById("slideButton");
     const WORLD=Object.freeze({width:800,height:300,groundY:245,baseSpeed:300,maxSpeed:560,speedEvery:250,speedMultiplier:1.1,gravity:3200,jumpVelocity:-920,scoreScale:1/12,playerX:72});
     const COLORS=Object.freeze({sky:"#fff",ink:"#3c3c39",faint:"#b7b7b0",overlay:"rgba(255,255,255,.9)"});
     const PLAYER_BOX=Object.freeze({run:{width:92,height:98},slide:{width:132,height:72}});
@@ -146,11 +156,19 @@
     function setSlide(value){if(value)ensureAudio();state.input.downHeld=value;if(value&&state.mode==="ready")state.mode="running"}
     window.addEventListener("keydown",e=>{if(["Space","ArrowUp","ArrowDown","KeyS","Escape"].includes(e.code))e.preventDefault();if(e.code==="Escape"&&!e.repeat)togglePause();else if(e.code==="KeyM"&&!e.repeat)toggleSound();else if((e.code==="Space"||e.code==="ArrowUp")&&!e.repeat)startOrJump();else if(e.code==="ArrowDown"||e.code==="KeyS")setSlide(true)});
     window.addEventListener("keyup",e=>{if(e.code==="ArrowDown"||e.code==="KeyS"){e.preventDefault();setSlide(false)}});
+    function isDownSwipe(dx,dy){return dy>28&&Math.abs(dy)>Math.abs(dx)*1.1}
+    function activateSwipeSlide(){state.touch.swipedDown=true;state.input.swipeSlideUntil=performance.now()+650;if(state.mode==="ready")state.mode="running"}
     canvas.addEventListener("touchstart",e=>{e.preventDefault();ensureAudio();const t=e.changedTouches[0];Object.assign(state.touch,{active:true,startX:t.clientX,startY:t.clientY,swipedDown:false});canvas.focus({preventScroll:true})},{passive:false});
-    canvas.addEventListener("touchmove",e=>{e.preventDefault();if(!state.touch.active)return;const t=e.changedTouches[0],dx=t.clientX-state.touch.startX,dy=t.clientY-state.touch.startY;if(dy>30&&Math.abs(dy)>Math.abs(dx)*1.15){state.touch.swipedDown=true;state.input.swipeSlideUntil=performance.now()+650;if(state.mode==="ready")state.mode="running"}},{passive:false});
-    canvas.addEventListener("touchend",e=>{e.preventDefault();if(!state.touch.active)return;const t=e.changedTouches[0],dx=t.clientX-state.touch.startX,dy=t.clientY-state.touch.startY;if(!state.touch.swipedDown&&Math.hypot(dx,dy)<24)startOrJump();state.touch.active=false;state.touch.lastEndAt=performance.now()},{passive:false});
+    canvas.addEventListener("touchmove",e=>{e.preventDefault();if(!state.touch.active)return;const t=e.changedTouches[0],dx=t.clientX-state.touch.startX,dy=t.clientY-state.touch.startY;if(isDownSwipe(dx,dy))activateSwipeSlide()},{passive:false});
+    canvas.addEventListener("touchend",e=>{e.preventDefault();if(!state.touch.active)return;const t=e.changedTouches[0],dx=t.clientX-state.touch.startX,dy=t.clientY-state.touch.startY;if(isDownSwipe(dx,dy))activateSwipeSlide();else if(!state.touch.swipedDown&&Math.hypot(dx,dy)<24)startOrJump();state.touch.active=false;state.touch.lastEndAt=performance.now()},{passive:false});
     canvas.addEventListener("touchcancel",()=>{state.touch.active=false},{passive:true});
     canvas.addEventListener("click",e=>{if(e.detail!==0&&performance.now()-state.touch.lastEndAt>=700)startOrJump()});
+    jumpButton.addEventListener("pointerdown",e=>{e.preventDefault();e.stopPropagation();startOrJump()});
+    slideButton.addEventListener("pointerdown",e=>{e.preventDefault();e.stopPropagation();if(slideButton.setPointerCapture)slideButton.setPointerCapture(e.pointerId);slideButton.classList.add("is-held");state.input.swipeSlideUntil=performance.now()+650;setSlide(true)});
+    function releaseSlideButton(e){if(e){e.preventDefault();e.stopPropagation()}slideButton.classList.remove("is-held");setSlide(false)}
+    slideButton.addEventListener("pointerup",releaseSlideButton);
+    slideButton.addEventListener("pointercancel",releaseSlideButton);
+    slideButton.addEventListener("lostpointercapture",releaseSlideButton);
     pauseButton.addEventListener("click",e=>{e.preventDefault();e.stopPropagation();togglePause()});
 
     // State reset and delta-time update loop.
