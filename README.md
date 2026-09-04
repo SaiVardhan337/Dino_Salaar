@@ -4,7 +4,7 @@
 
 ### Run. Jump. Slide. Survive.
 
-**A Chrome Dino-style endless runner reskinned with Prabhas from _Salaar_, now with cinematic colour and original monochrome modes.**
+**A Chrome Dino-style endless runner reskinned with Prabhas from _Salaar_, featuring cinematic Colour Mode and the original black-and-white Neel Mode.**
 
 ![HTML5](https://img.shields.io/badge/HTML5-Canvas-E34F26?style=for-the-badge&logo=html5&logoColor=white)
 ![JavaScript](https://img.shields.io/badge/JavaScript-Vanilla-F7DF1E?style=for-the-badge&logo=javascript&logoColor=111)
@@ -17,7 +17,7 @@
 
 ## 🎮 About the game
 
-**Salaar Run** is a fast, lightweight browser game inspired by Chrome's offline Dino Runner. Guide the hero through an endless desert, leap over waist-high cacti, and slide beneath birds flying at head level. Switch at any time between the original black-and-white presentation and a warm cinematic colour world. The pace gradually increases, so every second survived becomes more intense.
+**Salaar Run** is a fast, lightweight browser game inspired by Chrome's offline Dino Runner. Guide the hero through an endless desert, leap over waist-high cacti, and slide beneath birds flying at head level. Switch at any time between **Neel Mode**—the original black-and-white style named in tribute to _Salaar_ director Prashanth Neel—and a warm cinematic colour world. The pace gradually increases, so every second survived becomes more intense.
 
 Everything runs directly in the browser using one HTML file, HTML5 Canvas, vanilla JavaScript, and four local image assets—no framework, package installation, or build process required.
 
@@ -26,7 +26,7 @@ Everything runs directly in the browser using one HTML file, HTML5 Canvas, vanil
 - 🏃 Smooth eight-frame running animation
 - 🦘 Natural jump arc with dedicated airborne artwork
 - 🛝 Animated slide sequence with a reduced collision hitbox
-- 🎨 Instant Colour/Classic visual-mode switch with saved preference
+- 🎨 Instant Colour/Neel visual-mode switch with saved preference
 - 🏜️ Cinematic colour desert, colour hero animation, cacti, and flying birds
 - 🌵 Randomized waist-high cactus obstacles
 - 🐦 Head-level flying obstacles designed to be avoided by sliding

@@ -42,15 +42,15 @@
 <body>
   <main class="game-shell" aria-label="Salaar Run game">
     <div class="game-frame">
-      <canvas id="game" width="800" height="300" tabindex="0" role="img" aria-label="Salaar Run. Press Space or Up Arrow to jump. Press Down Arrow or S to slide. Press Escape to pause. Press C to switch between classic and colour modes. On touch screens, tap or use the up button to jump, swipe down or hold the down button to slide, and use the pause button to pause."></canvas>
-      <button id="modeButton" class="mode-button" type="button" aria-label="Visual mode: colour. Switch to classic mode" aria-pressed="true">MODE: COLOR</button>
+      <canvas id="game" width="800" height="300" tabindex="0" role="img" aria-label="Salaar Run. Press Space or Up Arrow to jump. Press Down Arrow or S to slide. Press Escape to pause. Press C to switch between Neel and colour modes. On touch screens, tap or use the up button to jump, swipe down or hold the down button to slide, and use the pause button to pause."></canvas>
+      <button id="modeButton" class="mode-button" type="button" aria-label="Visual mode: colour. Switch to Neel mode" aria-pressed="true">MODE: COLOR</button>
       <div class="mobile-controls" aria-label="Mobile game controls">
         <button id="jumpButton" class="mobile-button" type="button" aria-label="Jump">↑</button>
         <button id="pauseButton" class="mobile-button pause-button" type="button" aria-label="Pause game" aria-pressed="false">⏸</button>
         <button id="slideButton" class="mobile-button" type="button" aria-label="Slide">↓</button>
       </div>
     </div>
-    <div class="controls" aria-hidden="true"><span>SPACE / ↑ &nbsp; JUMP<br>ESC &nbsp; PAUSE</span><span>↓ / S &nbsp; SLIDE<br>C &nbsp; COLOR / CLASSIC &nbsp; • &nbsp; M &nbsp; SOUND</span></div>
+    <div class="controls" aria-hidden="true"><span>SPACE / ↑ &nbsp; JUMP<br>ESC &nbsp; PAUSE</span><span>↓ / S &nbsp; SLIDE<br>C &nbsp; COLOR / NEEL &nbsp; • &nbsp; M &nbsp; SOUND</span></div>
     <p id="status" class="sr-only" aria-live="polite">Loading game artwork.</p>
   </main>
 
@@ -170,9 +170,9 @@
     function playSpeedUp(){tone(420,620,.09,.08,"square");tone(620,840,.11,.08,"square",.08)}
     function toggleSound(){ensureAudio();audio.enabled=!audio.enabled;if(audio.master)audio.master.gain.setTargetAtTime(audio.enabled?.2:0,audio.ctx.currentTime,.015);statusText.textContent=audio.enabled?"Sound on.":"Sound muted.";if(audio.enabled)playRestart()}
     function syncVisualMode(){
-      const color=state.visualMode==="color",next=color?"classic":"colour";document.body.dataset.visualMode=state.visualMode;modeButton.textContent=color?"MODE: COLOR":"MODE: CLASSIC";modeButton.setAttribute("aria-pressed",String(color));modeButton.setAttribute("aria-label",`Visual mode: ${color?"colour":"classic"}. Switch to ${next} mode`);document.querySelector('meta[name="theme-color"]').content=color?"#201711":"#f4f3ef";
+      const color=state.visualMode==="color",current=color?"colour":"Neel black-and-white",next=color?"Neel":"colour";document.body.dataset.visualMode=state.visualMode;modeButton.textContent=color?"MODE: COLOR":"MODE: NEEL";modeButton.setAttribute("aria-pressed",String(color));modeButton.setAttribute("aria-label",`Visual mode: ${current}. Switch to ${next} mode`);document.querySelector('meta[name="theme-color"]').content=color?"#201711":"#f4f3ef";
     }
-    function toggleVisualMode(){state.visualMode=state.visualMode==="color"?"classic":"color";saveVisualMode();syncVisualMode();tone(state.visualMode==="color"?330:520,state.visualMode==="color"?560:360,.12,.07,"triangle");statusText.textContent=`${state.visualMode==="color"?"Colour":"Classic"} visual mode.`;draw()}
+    function toggleVisualMode(){state.visualMode=state.visualMode==="color"?"classic":"color";saveVisualMode();syncVisualMode();tone(state.visualMode==="color"?330:520,state.visualMode==="color"?560:360,.12,.07,"triangle");statusText.textContent=`${state.visualMode==="color"?"Colour":"Neel"} visual mode.`;draw()}
     function syncPauseButton(){const paused=state.mode==="paused";pauseButton.textContent=paused?"▶":"⏸";pauseButton.setAttribute("aria-label",paused?"Resume game":"Pause game");pauseButton.setAttribute("aria-pressed",String(paused))}
     function togglePause(){
       if(state.mode!=="running"&&state.mode!=="paused")return;ensureAudio();
