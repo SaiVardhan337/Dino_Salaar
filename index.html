@@ -4,6 +4,8 @@
   Required local assets:
   assets/character-actions.png — jump and slide poses
   assets/running-actions.png   — eight-frame running cycle
+  assets/color-character-atlas.png — colour run, jump, and slide poses
+  assets/color-desert-background.png — colour desert environment
 -->
 <html lang="en">
 <head>
@@ -13,16 +15,21 @@
   <title>Salaar Run</title>
   <style>
     :root{color-scheme:light;--page:#ecebe6;--panel:#fff;--ink:#343432;--muted:#757570;--edge:#d8d7d1}
+    body[data-visual-mode="color"]{--page:#201711;--panel:#3a281c;--ink:#f5dfb8;--muted:#c5a77c;--edge:#69462c}
     *{box-sizing:border-box}html,body{width:100%;min-height:100%;margin:0;overscroll-behavior:none}
-    body{display:grid;place-items:center;padding:20px;overflow-x:hidden;background:var(--page);color:var(--ink);font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono",monospace}
+    body{display:grid;place-items:center;padding:20px;overflow-x:hidden;background:var(--page);color:var(--ink);font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono",monospace;transition:background .25s ease,color .25s ease}
     .game-shell{width:min(100%,900px);user-select:none;-webkit-user-select:none}
     .game-frame{position:relative;padding:clamp(8px,2vw,18px);overflow:hidden;background:var(--panel);border:1px solid var(--edge);border-radius:14px;box-shadow:0 18px 50px rgba(35,35,30,.08)}
     canvas{display:block;width:100%;height:auto;aspect-ratio:8/3;background:#fff;border-radius:7px;outline:none;touch-action:none;-webkit-tap-highlight-color:transparent}
     canvas:focus-visible{box-shadow:0 0 0 3px rgba(52,52,50,.22)}
+    .mode-button{position:absolute;z-index:3;top:clamp(13px,2.4vw,23px);left:50%;transform:translateX(-50%);min-width:108px;height:27px;padding:0 11px;border:1px solid rgba(52,52,50,.25);border-radius:999px;background:rgba(255,255,255,.88);color:#3c3c39;font:700 10px/1 ui-monospace,monospace;letter-spacing:.08em;cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent;box-shadow:0 2px 8px rgba(35,35,30,.08)}
+    .mode-button:active{transform:translateX(-50%) scale(.96)}
+    body[data-visual-mode="color"] .mode-button{border-color:rgba(255,226,174,.36);background:rgba(46,30,19,.82);color:#ffe9bd;box-shadow:0 2px 10px rgba(17,10,5,.25)}
     .controls{display:flex;justify-content:space-between;gap:16px;margin:10px 4px 0;color:var(--muted);font-size:clamp(10px,1.8vw,13px);letter-spacing:.04em;line-height:1.5}.controls span:last-child{text-align:right}
     .mobile-controls{display:none;align-items:center;justify-content:space-between;gap:18px;margin-top:8px;padding:0 6px;touch-action:none}
-    .mobile-button{width:48px;height:48px;padding:0;border:1px solid rgba(52,52,50,.3);border-radius:50%;background:#fff;color:var(--ink);font:700 22px/1 ui-monospace,monospace;place-items:center;box-shadow:0 4px 14px rgba(35,35,30,.11);touch-action:none;-webkit-tap-highlight-color:transparent;cursor:pointer}
+    .mobile-button{width:48px;height:48px;padding:0;border:1px solid var(--edge);border-radius:50%;background:var(--panel);color:var(--ink);font:700 22px/1 ui-monospace,monospace;place-items:center;box-shadow:0 4px 14px rgba(35,35,30,.11);touch-action:none;-webkit-tap-highlight-color:transparent;cursor:pointer}
     .mobile-button:active,.mobile-button.is-held{background:#e8e7e1;box-shadow:inset 0 2px 6px rgba(35,35,30,.15)}
+    body[data-visual-mode="color"] .mobile-button:active,body[data-visual-mode="color"] .mobile-button.is-held{background:#563821}
     .pause-button{font-size:19px}
     .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
     @media(max-width:720px),(pointer:coarse){.mobile-controls{display:flex}.mobile-button{display:grid}}
@@ -35,22 +42,28 @@
 <body>
   <main class="game-shell" aria-label="Salaar Run game">
     <div class="game-frame">
-      <canvas id="game" width="800" height="300" tabindex="0" role="img" aria-label="Salaar Run. Press Space or Up Arrow to jump. Press Down Arrow or S to slide. Press Escape to pause. On touch screens, tap or use the up button to jump, swipe down or hold the down button to slide, and use the pause button to pause."></canvas>
+      <canvas id="game" width="800" height="300" tabindex="0" role="img" aria-label="Salaar Run. Press Space or Up Arrow to jump. Press Down Arrow or S to slide. Press Escape to pause. Press C to switch between classic and colour modes. On touch screens, tap or use the up button to jump, swipe down or hold the down button to slide, and use the pause button to pause."></canvas>
+      <button id="modeButton" class="mode-button" type="button" aria-label="Visual mode: colour. Switch to classic mode" aria-pressed="true">MODE: COLOR</button>
       <div class="mobile-controls" aria-label="Mobile game controls">
         <button id="jumpButton" class="mobile-button" type="button" aria-label="Jump">↑</button>
         <button id="pauseButton" class="mobile-button pause-button" type="button" aria-label="Pause game" aria-pressed="false">⏸</button>
         <button id="slideButton" class="mobile-button" type="button" aria-label="Slide">↓</button>
       </div>
     </div>
-    <div class="controls" aria-hidden="true"><span>SPACE / ↑ &nbsp; JUMP<br>ESC &nbsp; PAUSE</span><span>↓ / S &nbsp; SLIDE<br>M &nbsp; SOUND ON/OFF</span></div>
-    <p id="status" class="sr-only" aria-live="polite">Loading character sprite sheet.</p>
+    <div class="controls" aria-hidden="true"><span>SPACE / ↑ &nbsp; JUMP<br>ESC &nbsp; PAUSE</span><span>↓ / S &nbsp; SLIDE<br>C &nbsp; COLOR / CLASSIC &nbsp; • &nbsp; M &nbsp; SOUND</span></div>
+    <p id="status" class="sr-only" aria-live="polite">Loading game artwork.</p>
   </main>
 
   <script>
     "use strict";
 
     // Asset loading and source rectangles in the supplied sprite sheets.
-    const ASSETS=Object.freeze({actionSheet:"assets/character-actions.png",runningSheet:"assets/running-actions.png"});
+    const ASSETS=Object.freeze({
+      actionSheet:"assets/character-actions.png",
+      runningSheet:"assets/running-actions.png",
+      colorSheet:"assets/color-character-atlas.png",
+      colorBackground:"assets/color-desert-background.png"
+    });
     const SPRITES=Object.freeze({
       takeoff:{x:166,y:235,width:226,height:253},
       inAir:{x:625,y:169,width:205,height:276},
@@ -69,18 +82,37 @@
       {x:820,y:558,width:247,height:278},
       {x:1212,y:544,width:206,height:289}
     ]);
+    const COLOR_SPRITES=Object.freeze({
+      takeoff:{x:91,y:397,width:176,height:213},
+      inAir:{x:418,y:342,width:153,height:223},
+      landing:{x:660,y:402,width:160,height:208},
+      slideStart:{x:101,y:662,width:166,height:194},
+      sliding:{x:340,y:681,width:429,height:151},
+      slideEnd:{x:806,y:632,width:175,height:211}
+    });
+    const COLOR_RUN_SPRITES=Object.freeze([
+      {x:31,y:69,width:171,height:238},
+      {x:232,y:70,width:155,height:238},
+      {x:441,y:70,width:151,height:238},
+      {x:653,y:69,width:163,height:239},
+      {x:849,y:68,width:180,height:238},
+      {x:1065,y:66,width:173,height:240},
+      {x:1292,y:65,width:157,height:242},
+      {x:1503,y:63,width:168,height:244}
+    ]);
 
     // Canvas and game constants.
     const canvas=document.getElementById("game");
     const ctx=canvas.getContext("2d",{alpha:false});
     const statusText=document.getElementById("status");
+    const modeButton=document.getElementById("modeButton");
     const jumpButton=document.getElementById("jumpButton");
     const pauseButton=document.getElementById("pauseButton");
     const slideButton=document.getElementById("slideButton");
     const WORLD=Object.freeze({width:800,height:300,groundY:245,baseSpeed:300,maxSpeed:560,speedEvery:250,speedMultiplier:1.1,gravity:3200,jumpVelocity:-920,scoreScale:1/12,playerX:72});
     const COLORS=Object.freeze({sky:"#fff",ink:"#3c3c39",faint:"#b7b7b0",overlay:"rgba(255,255,255,.9)"});
     const PLAYER_BOX=Object.freeze({run:{width:92,height:98},slide:{width:132,height:72}});
-    let characterSheet=null,runningSheet=null;
+    let characterSheet=null,runningSheet=null,colorCharacterSheet=null,colorBackground=null;
 
     function configureCanvas(){
       const ratio=Math.min(window.devicePixelRatio||1,2);
@@ -91,7 +123,7 @@
 
     // Game state.
     const state={
-      mode:"loading",score:0,highScore:loadHighScore(),speed:WORLD.baseSpeed,speedLevel:0,speedFlash:0,elapsed:0,nextChime:100,
+      mode:"loading",visualMode:loadVisualMode(),score:0,highScore:loadHighScore(),speed:WORLD.baseSpeed,speedLevel:0,speedFlash:0,elapsed:0,nextChime:100,
       spawnTimer:1.4,groundOffset:0,lastTimestamp:0,obstacles:[],runFrame:0,runFrameTimer:0,
       input:{downHeld:false,swipeSlideUntil:0},
       touch:{active:false,startX:0,startY:0,swipedDown:false,lastEndAt:-Infinity},
@@ -101,10 +133,12 @@
 
     function loadHighScore(){try{const n=parseInt(localStorage.getItem("salaarRunHighScore"),10);return Number.isFinite(n)&&n>0?n:0}catch(_){return 0}}
     function saveHighScore(){try{localStorage.setItem("salaarRunHighScore",String(state.highScore))}catch(_){}}
+    function loadVisualMode(){try{return localStorage.getItem("salaarRunVisualMode")==="classic"?"classic":"color"}catch(_){return"color"}}
+    function saveVisualMode(){try{localStorage.setItem("salaarRunVisualMode",state.visualMode)}catch(_){}}
     function loadImage(src){return new Promise((resolve,reject)=>{const image=new Image();image.decoding="async";image.onload=()=>resolve(image);image.onerror=reject;image.src=src})}
-    function loadCharacterSheets(){
+    function loadGameAssets(){
       drawLoading();
-      return Promise.all([loadImage(ASSETS.actionSheet),loadImage(ASSETS.runningSheet)]).then(([actions,running])=>{characterSheet=actions;runningSheet=running});
+      return Promise.all([loadImage(ASSETS.actionSheet),loadImage(ASSETS.runningSheet),loadImage(ASSETS.colorSheet),loadImage(ASSETS.colorBackground)]).then(([actions,running,colorAtlas,desert])=>{characterSheet=actions;runningSheet=running;colorCharacterSheet=colorAtlas;colorBackground=desert});
     }
 
     // Procedural Web Audio: no sound files or external dependencies required.
@@ -135,6 +169,10 @@
     function playRestart(){tone(260,520,.12,.08,"square")}
     function playSpeedUp(){tone(420,620,.09,.08,"square");tone(620,840,.11,.08,"square",.08)}
     function toggleSound(){ensureAudio();audio.enabled=!audio.enabled;if(audio.master)audio.master.gain.setTargetAtTime(audio.enabled?.2:0,audio.ctx.currentTime,.015);statusText.textContent=audio.enabled?"Sound on.":"Sound muted.";if(audio.enabled)playRestart()}
+    function syncVisualMode(){
+      const color=state.visualMode==="color",next=color?"classic":"colour";document.body.dataset.visualMode=state.visualMode;modeButton.textContent=color?"MODE: COLOR":"MODE: CLASSIC";modeButton.setAttribute("aria-pressed",String(color));modeButton.setAttribute("aria-label",`Visual mode: ${color?"colour":"classic"}. Switch to ${next} mode`);document.querySelector('meta[name="theme-color"]').content=color?"#201711":"#f4f3ef";
+    }
+    function toggleVisualMode(){state.visualMode=state.visualMode==="color"?"classic":"color";saveVisualMode();syncVisualMode();tone(state.visualMode==="color"?330:520,state.visualMode==="color"?560:360,.12,.07,"triangle");statusText.textContent=`${state.visualMode==="color"?"Colour":"Classic"} visual mode.`;draw()}
     function syncPauseButton(){const paused=state.mode==="paused";pauseButton.textContent=paused?"▶":"⏸";pauseButton.setAttribute("aria-label",paused?"Resume game":"Pause game");pauseButton.setAttribute("aria-pressed",String(paused))}
     function togglePause(){
       if(state.mode!=="running"&&state.mode!=="paused")return;ensureAudio();
@@ -154,7 +192,7 @@
       if(state.mode==="running"&&p.grounded){p.grounded=false;p.sliding=false;p.slidePhase="none";p.slideTimer=0;p.velocityY=WORLD.jumpVelocity;playJump();statusText.textContent="Jumping."}
     }
     function setSlide(value){if(value)ensureAudio();state.input.downHeld=value;if(value&&state.mode==="ready")state.mode="running"}
-    window.addEventListener("keydown",e=>{if(["Space","ArrowUp","ArrowDown","KeyS","Escape"].includes(e.code))e.preventDefault();if(e.code==="Escape"&&!e.repeat)togglePause();else if(e.code==="KeyM"&&!e.repeat)toggleSound();else if((e.code==="Space"||e.code==="ArrowUp")&&!e.repeat)startOrJump();else if(e.code==="ArrowDown"||e.code==="KeyS")setSlide(true)});
+    window.addEventListener("keydown",e=>{if(["Space","ArrowUp","ArrowDown","KeyS","KeyC","Escape"].includes(e.code))e.preventDefault();if(e.code==="Escape"&&!e.repeat)togglePause();else if(e.code==="KeyM"&&!e.repeat)toggleSound();else if(e.code==="KeyC"&&!e.repeat)toggleVisualMode();else if((e.code==="Space"||e.code==="ArrowUp")&&!e.repeat)startOrJump();else if(e.code==="ArrowDown"||e.code==="KeyS")setSlide(true)});
     window.addEventListener("keyup",e=>{if(e.code==="ArrowDown"||e.code==="KeyS"){e.preventDefault();setSlide(false)}});
     function isDownSwipe(dx,dy){return dy>28&&Math.abs(dy)>Math.abs(dx)*1.1}
     function activateSwipeSlide(){state.touch.swipedDown=true;state.input.swipeSlideUntil=performance.now()+650;if(state.mode==="ready")state.mode="running"}
@@ -169,6 +207,7 @@
     slideButton.addEventListener("pointerup",releaseSlideButton);
     slideButton.addEventListener("pointercancel",releaseSlideButton);
     slideButton.addEventListener("lostpointercapture",releaseSlideButton);
+    modeButton.addEventListener("click",e=>{e.preventDefault();e.stopPropagation();ensureAudio();toggleVisualMode()});
     pauseButton.addEventListener("click",e=>{e.preventDefault();e.stopPropagation();togglePause()});
 
     // State reset and delta-time update loop.
@@ -215,7 +254,7 @@
 
     // Sprite selection and forgiving collision boxes.
     function getPlayerSpriteKey(){const p=state.player;if(!p.grounded)return"inAir";if(p.sliding)return p.slidePhase==="enter"?"slideStart":p.slidePhase==="exit"?"slideEnd":"sliding";return"run"}
-    function getSpriteData(key,runFrame=state.runFrame){return key==="run"?{sheet:runningSheet,sprite:RUN_SPRITES[runFrame]}:{sheet:characterSheet,sprite:SPRITES[key]}}
+    function getSpriteData(key,runFrame=state.runFrame){if(state.visualMode==="color")return key==="run"?{sheet:colorCharacterSheet,sprite:COLOR_RUN_SPRITES[runFrame]}:{sheet:colorCharacterSheet,sprite:COLOR_SPRITES[key]};return key==="run"?{sheet:runningSheet,sprite:RUN_SPRITES[runFrame]}:{sheet:characterSheet,sprite:SPRITES[key]}}
     function getPlayerVisualRect(key=getPlayerSpriteKey(),runFrame=state.runFrame){
       const s=getSpriteData(key,runFrame).sprite,box=state.player.sliding?PLAYER_BOX.slide:PLAYER_BOX.run,scale=Math.min(box.width/s.width,box.height/s.height);
       return{x:WORLD.playerX,y:state.player.bottomY-s.height*scale,width:s.width*scale,height:s.height*scale};
@@ -227,12 +266,21 @@
     function endGame(){state.mode="gameover";state.player.frozenSpriteKey=getPlayerSpriteKey();state.player.frozenRunFrame=state.runFrame;playCrash();const score=Math.floor(state.score);if(score>state.highScore){state.highScore=score;saveHighScore()}statusText.textContent=`Game over. Score ${score}. High score ${state.highScore}. Press Space to restart.`}
 
     // Canvas rendering.
-    function draw(){ctx.fillStyle=COLORS.sky;ctx.fillRect(0,0,WORLD.width,WORLD.height);drawClouds();drawObstacles();drawPlayer();drawGround();drawHud();if(state.speedFlash>0&&state.mode==="running")drawSpeedUp();if(state.mode==="ready")drawReady();if(state.mode==="paused")drawPaused();if(state.mode==="gameover")drawGameOver();if(state.mode==="error")drawAssetError()}
-    function drawPlayer(){
-      if(!characterSheet||!runningSheet)return;const frozen=state.mode==="gameover",key=frozen?state.player.frozenSpriteKey:getPlayerSpriteKey(),frame=frozen?state.player.frozenRunFrame:state.runFrame,data=getSpriteData(key,frame),s=data.sprite,r=getPlayerVisualRect(key,frame);
-      ctx.drawImage(data.sheet,s.x,s.y,s.width,s.height,r.x,r.y,r.width,r.height);
+    function isColorMode(){return state.visualMode==="color"}
+    function canvasInk(){return isColorMode()?"#ffe7ba":COLORS.ink}
+    function canvasFaint(){return isColorMode()?"#d7b983":COLORS.faint}
+    function canvasOverlay(){return isColorMode()?"rgba(42,27,17,.88)":COLORS.overlay}
+    function applyTextShadow(){if(isColorMode()){ctx.shadowColor="rgba(30,15,7,.9)";ctx.shadowBlur=3;ctx.shadowOffsetX=1;ctx.shadowOffsetY=2}}
+    function draw(){
+      if(isColorMode()&&colorBackground)drawColorBackdrop();else{ctx.fillStyle=COLORS.sky;ctx.fillRect(0,0,WORLD.width,WORLD.height);drawClouds()}
+      drawObstacles();drawPlayer();drawGround();drawHud();if(state.speedFlash>0&&state.mode==="running")drawSpeedUp();if(state.mode==="ready")drawReady();if(state.mode==="paused")drawPaused();if(state.mode==="gameover")drawGameOver();if(state.mode==="error")drawAssetError();
     }
-    function drawObstacles(){ctx.save();ctx.fillStyle=COLORS.ink;for(const o of state.obstacles)o.kind==="bird"?drawBird(o):drawCactus(o);ctx.restore()}
+    function drawColorBackdrop(){ctx.fillStyle="#53675e";ctx.fillRect(0,0,WORLD.width,WORLD.height);ctx.drawImage(colorBackground,0,10,WORLD.width,WORLD.height);const shade=ctx.createLinearGradient(0,185,0,WORLD.height);shade.addColorStop(0,"rgba(72,39,20,0)");shade.addColorStop(1,"rgba(29,14,8,.2)");ctx.fillStyle=shade;ctx.fillRect(0,185,WORLD.width,WORLD.height-185)}
+    function drawPlayer(){
+      if(!characterSheet||!runningSheet||!colorCharacterSheet)return;const frozen=state.mode==="gameover",key=frozen?state.player.frozenSpriteKey:getPlayerSpriteKey(),frame=frozen?state.player.frozenRunFrame:state.runFrame,data=getSpriteData(key,frame),s=data.sprite,r=getPlayerVisualRect(key,frame);
+      ctx.save();if(isColorMode())ctx.globalCompositeOperation="multiply";ctx.drawImage(data.sheet,s.x,s.y,s.width,s.height,r.x,r.y,r.width,r.height);ctx.restore();
+    }
+    function drawObstacles(){ctx.save();for(const o of state.obstacles){if(o.kind==="bird")drawBird(o);else{if(isColorMode()){const g=ctx.createLinearGradient(o.x,o.y,o.x+o.width,o.y);g.addColorStop(0,"#314612");g.addColorStop(.45,"#779133");g.addColorStop(1,"#3d5816");ctx.fillStyle=g;ctx.shadowColor="rgba(31,18,7,.45)";ctx.shadowBlur=2}else{ctx.fillStyle=COLORS.ink;ctx.shadowBlur=0}drawCactus(o)}}ctx.restore()}
     function drawCactus(o){
       const x=Math.round(o.x),y=Math.round(o.y),w=o.width,h=o.height;
       if(o.variant===0)drawMiniCactus(x,y,w,h);
@@ -241,27 +289,29 @@
     }
     function drawMiniCactus(x,y,w,h){const trunk=Math.max(6,Math.round(w*.3)),center=x+Math.round((w-trunk)/2);ctx.fillRect(center,y,trunk,h);ctx.fillRect(x,y+h*.38,center-x+2,7);ctx.fillRect(x,y+h*.22,6,h*.24);ctx.fillRect(center+trunk-2,y+h*.55,x+w-center-trunk+2,7);ctx.fillRect(x+w-6,y+h*.38,6,h*.25)}
     function drawBird(o){
-      const x=o.x,y=o.y+o.bobOffset,up=Math.sin(o.flapTime*10)>0;ctx.beginPath();ctx.ellipse(x+31,y+19,17,8,0,0,Math.PI*2);ctx.fill();ctx.fillRect(x+45,y+16,10,5);
-      ctx.beginPath();ctx.moveTo(x+55,y+16);ctx.lineTo(x+62,y+19);ctx.lineTo(x+55,y+21);ctx.closePath();ctx.fill();
+      const x=o.x,y=o.y+o.bobOffset,up=Math.sin(o.flapTime*10)>0;ctx.fillStyle=isColorMode()?"#3a2417":COLORS.ink;ctx.beginPath();ctx.ellipse(x+31,y+19,17,8,0,0,Math.PI*2);ctx.fill();ctx.fillRect(x+45,y+16,10,5);
+      if(isColorMode())ctx.fillStyle="#d59a39";ctx.beginPath();ctx.moveTo(x+55,y+16);ctx.lineTo(x+62,y+19);ctx.lineTo(x+55,y+21);ctx.closePath();ctx.fill();ctx.fillStyle=isColorMode()?"#3a2417":COLORS.ink;
       ctx.beginPath();ctx.moveTo(x+25,y+18);ctx.lineTo(x+2,up?y+2:y+31);ctx.lineTo(x+34,y+21);ctx.closePath();ctx.fill();
       ctx.beginPath();ctx.moveTo(x+29,y+20);ctx.lineTo(x+12,up?y+32:y+5);ctx.lineTo(x+39,y+22);ctx.closePath();ctx.fill();
+      if(isColorMode()){ctx.fillStyle="#f6df9e";ctx.fillRect(x+47,y+16,2,2)}
     }
     function drawGround(){
-      ctx.save();ctx.strokeStyle=COLORS.ink;ctx.fillStyle=COLORS.ink;ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(0,WORLD.groundY+1);ctx.lineTo(WORLD.width,WORLD.groundY+1);ctx.stroke();
-      for(let x=-state.groundOffset-20;x<WORLD.width+30;x+=48){const i=Math.floor((x+state.groundOffset+20)/48),len=3+Math.abs(i*17)%11,y=WORLD.groundY+11+Math.abs(i*7)%19;ctx.fillRect(Math.round(x),y,len,2);if(i%3===0)ctx.fillRect(Math.round(x+20),y+8,3,2)}ctx.restore();
+      ctx.save();ctx.strokeStyle=isColorMode()?"#432512":COLORS.ink;ctx.fillStyle=isColorMode()?"#a5632f":COLORS.ink;ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(0,WORLD.groundY+1);ctx.lineTo(WORLD.width,WORLD.groundY+1);ctx.stroke();
+      for(let x=-state.groundOffset-20;x<WORLD.width+30;x+=48){const i=Math.floor((x+state.groundOffset+20)/48),len=3+Math.abs(i*17)%11,y=WORLD.groundY+11+Math.abs(i*7)%19;ctx.fillRect(Math.round(x),y,len,2);if(i%3===0){if(isColorMode())ctx.fillStyle="#4e2a16";ctx.fillRect(Math.round(x+20),y+8,3,2);if(isColorMode())ctx.fillStyle="#a5632f"}}ctx.restore();
     }
     function drawClouds(){ctx.save();ctx.strokeStyle=COLORS.faint;ctx.lineWidth=2;for(const c of clouds){const{x,y,scale:s}=c;ctx.beginPath();ctx.moveTo(x,y+22*s);ctx.lineTo(x+14*s,y+22*s);ctx.quadraticCurveTo(x+19*s,y+9*s,x+34*s,y+12*s);ctx.quadraticCurveTo(x+42*s,y-s,x+56*s,y+9*s);ctx.quadraticCurveTo(x+69*s,y+7*s,x+75*s,y+22*s);ctx.lineTo(x+92*s,y+22*s);ctx.stroke()}ctx.restore()}
-    function drawHud(){const score=String(Math.floor(state.score)).padStart(5,"0"),high=String(Math.floor(state.highScore)).padStart(5,"0");ctx.save();ctx.fillStyle=COLORS.ink;ctx.textBaseline="top";ctx.font="700 13px ui-monospace,monospace";ctx.textAlign="left";ctx.fillText("SALAAR RUN",24,21);ctx.font="700 19px ui-monospace,monospace";ctx.textAlign="right";ctx.fillText(`HI ${high}  ${score}`,WORLD.width-24,18);ctx.restore()}
-    function drawReady(){ctx.save();ctx.fillStyle=COLORS.ink;ctx.textAlign="center";ctx.textBaseline="middle";ctx.font="700 19px ui-monospace,monospace";ctx.fillText("PRESS SPACE OR TAP TO START",WORLD.width/2,155);ctx.font="13px ui-monospace,monospace";ctx.fillStyle=COLORS.faint;ctx.fillText("↑ JUMP   •   ↓ SLIDE",WORLD.width/2,181);ctx.restore()}
-    function drawSpeedUp(){ctx.save();ctx.globalAlpha=Math.min(1,state.speedFlash*2);ctx.fillStyle=COLORS.ink;ctx.textAlign="center";ctx.textBaseline="middle";ctx.font="700 17px ui-monospace,monospace";ctx.fillText(`SPEED UP!  LEVEL ${state.speedLevel+1}`,WORLD.width/2,72);ctx.restore()}
-    function drawPaused(){ctx.save();ctx.fillStyle=COLORS.overlay;ctx.fillRect(0,78,WORLD.width,116);ctx.fillStyle=COLORS.ink;ctx.textAlign="center";ctx.textBaseline="middle";ctx.font="700 28px ui-monospace,monospace";ctx.fillText("PAUSED",WORLD.width/2,116);ctx.font="13px ui-monospace,monospace";ctx.fillText("PRESS ESC OR TAP ▶ TO RESUME",WORLD.width/2,158);ctx.restore()}
-    function drawGameOver(){ctx.save();ctx.fillStyle=COLORS.overlay;ctx.fillRect(0,73,WORLD.width,124);ctx.fillStyle=COLORS.ink;ctx.textAlign="center";ctx.textBaseline="middle";ctx.font="700 28px ui-monospace,monospace";ctx.fillText("GAME OVER",WORLD.width/2,105);ctx.font="700 15px ui-monospace,monospace";ctx.fillText(`SCORE ${String(Math.floor(state.score)).padStart(5,"0")}  •  HI ${String(state.highScore).padStart(5,"0")}`,WORLD.width/2,146);ctx.font="13px ui-monospace,monospace";ctx.fillText("PRESS SPACE OR TAP TO RESTART",WORLD.width/2,174);ctx.restore()}
-    function drawLoading(){ctx.fillStyle=COLORS.sky;ctx.fillRect(0,0,WORLD.width,WORLD.height);ctx.fillStyle=COLORS.ink;ctx.textAlign="center";ctx.textBaseline="middle";ctx.font="700 18px ui-monospace,monospace";ctx.fillText("LOADING CHARACTER...",WORLD.width/2,WORLD.height/2)}
-    function drawAssetError(){ctx.save();ctx.fillStyle=COLORS.overlay;ctx.fillRect(55,72,WORLD.width-110,145);ctx.fillStyle=COLORS.ink;ctx.textAlign="center";ctx.textBaseline="middle";ctx.font="700 18px ui-monospace,monospace";ctx.fillText("CHARACTER IMAGES NOT FOUND",WORLD.width/2,103);ctx.font="13px ui-monospace,monospace";ctx.fillText(`${ASSETS.actionSheet} + ${ASSETS.runningSheet}`,WORLD.width/2,140);ctx.fillStyle=COLORS.faint;ctx.fillText("Keep both beside index.html, then reload.",WORLD.width/2,176);ctx.restore()}
+    function drawHud(){const score=String(Math.floor(state.score)).padStart(5,"0"),high=String(Math.floor(state.highScore)).padStart(5,"0");ctx.save();applyTextShadow();ctx.fillStyle=canvasInk();ctx.textBaseline="top";ctx.font="700 13px ui-monospace,monospace";ctx.textAlign="left";ctx.fillText("SALAAR RUN",24,21);ctx.font="700 19px ui-monospace,monospace";ctx.textAlign="right";ctx.fillText(`HI ${high}  ${score}`,WORLD.width-24,18);ctx.restore()}
+    function drawReady(){ctx.save();applyTextShadow();ctx.fillStyle=canvasInk();ctx.textAlign="center";ctx.textBaseline="middle";ctx.font="700 19px ui-monospace,monospace";ctx.fillText("PRESS SPACE OR TAP TO START",WORLD.width/2,155);ctx.font="13px ui-monospace,monospace";ctx.fillStyle=canvasFaint();ctx.fillText("↑ JUMP   •   ↓ SLIDE   •   C MODE",WORLD.width/2,181);ctx.restore()}
+    function drawSpeedUp(){ctx.save();applyTextShadow();ctx.globalAlpha=Math.min(1,state.speedFlash*2);ctx.fillStyle=canvasInk();ctx.textAlign="center";ctx.textBaseline="middle";ctx.font="700 17px ui-monospace,monospace";ctx.fillText(`SPEED UP!  LEVEL ${state.speedLevel+1}`,WORLD.width/2,72);ctx.restore()}
+    function drawPaused(){ctx.save();ctx.fillStyle=canvasOverlay();ctx.fillRect(0,78,WORLD.width,116);ctx.fillStyle=canvasInk();ctx.textAlign="center";ctx.textBaseline="middle";ctx.font="700 28px ui-monospace,monospace";ctx.fillText("PAUSED",WORLD.width/2,116);ctx.font="13px ui-monospace,monospace";ctx.fillText("PRESS ESC OR TAP ▶ TO RESUME",WORLD.width/2,158);ctx.restore()}
+    function drawGameOver(){ctx.save();ctx.fillStyle=canvasOverlay();ctx.fillRect(0,73,WORLD.width,124);ctx.fillStyle=canvasInk();ctx.textAlign="center";ctx.textBaseline="middle";ctx.font="700 28px ui-monospace,monospace";ctx.fillText("GAME OVER",WORLD.width/2,105);ctx.font="700 15px ui-monospace,monospace";ctx.fillText(`SCORE ${String(Math.floor(state.score)).padStart(5,"0")}  •  HI ${String(state.highScore).padStart(5,"0")}`,WORLD.width/2,146);ctx.font="13px ui-monospace,monospace";ctx.fillText("PRESS SPACE OR TAP TO RESTART",WORLD.width/2,174);ctx.restore()}
+    function drawLoading(){ctx.fillStyle=state&&state.visualMode==="color"?"#53675e":COLORS.sky;ctx.fillRect(0,0,WORLD.width,WORLD.height);ctx.fillStyle=state&&state.visualMode==="color"?"#ffe7ba":COLORS.ink;ctx.textAlign="center";ctx.textBaseline="middle";ctx.font="700 18px ui-monospace,monospace";ctx.fillText("LOADING BOTH VISUAL MODES...",WORLD.width/2,WORLD.height/2)}
+    function drawAssetError(){ctx.save();ctx.fillStyle=canvasOverlay();ctx.fillRect(55,72,WORLD.width-110,145);ctx.fillStyle=canvasInk();ctx.textAlign="center";ctx.textBaseline="middle";ctx.font="700 18px ui-monospace,monospace";ctx.fillText("ONE OR MORE GAME IMAGES ARE MISSING",WORLD.width/2,103);ctx.font="13px ui-monospace,monospace";ctx.fillText("Check the four filenames listed at the top of index.html.",WORLD.width/2,140);ctx.fillStyle=canvasFaint();ctx.fillText("Keep them inside the assets folder, then reload.",WORLD.width/2,176);ctx.restore()}
 
     function randomBetween(min,max){return min+Math.random()*(max-min)}
     function gameLoop(timestamp){if(!state.lastTimestamp)state.lastTimestamp=timestamp;const dt=Math.min((timestamp-state.lastTimestamp)/1000,.05);state.lastTimestamp=timestamp;update(dt,timestamp);draw();requestAnimationFrame(gameLoop)}
-    loadCharacterSheets().then(()=>{resetGame(false);requestAnimationFrame(gameLoop)}).catch(()=>{state.mode="error";statusText.textContent="Missing one or both character sprite sheets.";requestAnimationFrame(gameLoop)});
+    syncVisualMode();
+    loadGameAssets().then(()=>{resetGame(false);requestAnimationFrame(gameLoop)}).catch(()=>{state.mode="error";statusText.textContent="One or more required game images are missing.";requestAnimationFrame(gameLoop)});
   </script>
 </body>
 </html>

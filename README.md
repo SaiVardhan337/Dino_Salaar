@@ -4,7 +4,7 @@
 
 ### Run. Jump. Slide. Survive.
 
-**A Chrome Dino-style endless runner reskinned with Prabhas from _Salaar_.**
+**A Chrome Dino-style endless runner reskinned with Prabhas from _Salaar_, now with cinematic colour and original monochrome modes.**
 
 ![HTML5](https://img.shields.io/badge/HTML5-Canvas-E34F26?style=for-the-badge&logo=html5&logoColor=white)
 ![JavaScript](https://img.shields.io/badge/JavaScript-Vanilla-F7DF1E?style=for-the-badge&logo=javascript&logoColor=111)
@@ -17,15 +17,17 @@
 
 ## 🎮 About the game
 
-**Salaar Run** is a fast, lightweight browser game inspired by Chrome's offline Dino Runner. Guide the hero through an endless desert, leap over waist-high cacti, and slide beneath birds flying at head level. The pace gradually increases, so every second survived becomes more intense.
+**Salaar Run** is a fast, lightweight browser game inspired by Chrome's offline Dino Runner. Guide the hero through an endless desert, leap over waist-high cacti, and slide beneath birds flying at head level. Switch at any time between the original black-and-white presentation and a warm cinematic colour world. The pace gradually increases, so every second survived becomes more intense.
 
-Everything runs directly in the browser using one HTML file, HTML5 Canvas, vanilla JavaScript, and two local character sprite sheets—no framework, package installation, or build process required.
+Everything runs directly in the browser using one HTML file, HTML5 Canvas, vanilla JavaScript, and four local image assets—no framework, package installation, or build process required.
 
 ## ✨ Features
 
 - 🏃 Smooth eight-frame running animation
 - 🦘 Natural jump arc with dedicated airborne artwork
 - 🛝 Animated slide sequence with a reduced collision hitbox
+- 🎨 Instant Colour/Classic visual-mode switch with saved preference
+- 🏜️ Cinematic colour desert, colour hero animation, cacti, and flying birds
 - 🌵 Randomized waist-high cactus obstacles
 - 🐦 Head-level flying obstacles designed to be avoided by sliding
 - ⚡ A noticeable 10% speed boost every 250 points, up to the maximum pace
@@ -43,6 +45,7 @@ Everything runs directly in the browser using one HTML file, HTML5 Canvas, vanil
 | Jump | `Space` or `↑` | Tap the game or tap `↑` |
 | Slide | Hold `S` or `↓` | Swipe down, tap `↓`, or hold `↓` |
 | Sound | Press `M` to mute/unmute | — |
+| Visual mode | Press `C` | Tap the `MODE` button |
 | Pause/resume | `Esc` | Tap `⏸` or `▶` |
 | Restart | `Space` or `↑` after collision | Tap after collision |
 
@@ -83,7 +86,9 @@ Dino_Salaar/
 ├── index.html
 ├── assets/
 │   ├── character-actions.png   # Jump and slide poses
-│   └── running-actions.png     # Eight-frame running cycle
+│   ├── running-actions.png     # Eight-frame running cycle
+│   ├── color-character-atlas.png # Colour run, jump, and slide poses
+│   └── color-desert-background.png # Colour desert environment
 ├── README.md
 └── .gitignore
 ```
@@ -125,6 +130,7 @@ _Replace the URL above after the first production deployment._
 2. Slide when a bird approaches the hero's head or shoulders.
 3. Prepare for a 10% speed boost whenever the score crosses another 250 points.
 4. Press `M` anytime if you prefer to play silently.
+5. Press `C` anytime—even while paused or running—to switch visual styles.
 
 ---
 
